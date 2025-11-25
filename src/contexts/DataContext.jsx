@@ -1,0 +1,237 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+
+const DataContext = createContext();
+
+export const DataProvider = ({ children }) => {
+    const [settings, setSettings] = useState([]);
+    const [fields, setFields] = useState([]);
+    const [categories, setCategories] = useState([]);
+    const [feedback, setFeedback] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch Initial Data
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [settingsRes, fieldsRes, catsRes, feedbackRes] = await Promise.all([
+                supabase.from('settings').select('*'),
+                supabase.from('fields').select('*'),
+                supabase.from('categories').select('*'),
+                supabase.from('feedback').select('*')
+            ]);
+
+            if (settingsRes.data) {
+                // Flatten the 'data' JSONB column back into the object for the UI
+                const flattenedSettings = settingsRes.data.map(s => ({
+                    ...s,
+                    ...s.data // Spread the JSONB fields (temp, speed, etc.) to top level
+                }));
+                setSettings(flattenedSettings);
+            }
+            if (fieldsRes.data) {
+                // Map category_id to categoryId for UI consistency
+                const mappedFields = fieldsRes.data.map(f => ({
+                    ...f,
+                    categoryId: f.category_id
+                }));
+                setFields(mappedFields);
+            }
+            if (catsRes.data) setCategories(catsRes.data);
+            if (feedbackRes.data) setFeedback(feedbackRes.data);
+        } catch (error) {
+            console.error("Error fetching data:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    // --- Settings Management ---
+    const addSetting = async (newSetting) => {
+        // Separate standard fields from dynamic fields
+        const { sku, legNumber, caseSize, program, ...dynamicData } = newSetting;
+
+        const { data, error } = await supabase.from('settings').insert([{
+            sku,
+            leg_number: legNumber,
+            case_size: caseSize,
+            program,
+            data: dynamicData
+        }]).select();
+
+        if (error) {
+            console.error("Error adding setting:", error);
+            alert("Failed to add setting");
+        } else if (data) {
+            const flattened = { ...data[0], ...data[0].data };
+            setSettings(prev => [...prev, flattened]);
+        }
+    };
+
+    const updateSetting = async (id, updatedSetting) => {
+        const { sku, legNumber, caseSize, program, ...dynamicData } = updatedSetting;
+
+        const { error } = await supabase.from('settings').update({
+            sku,
+            leg_number: legNumber,
+            case_size: caseSize,
+            program,
+            data: dynamicData
+        }).eq('id', id);
+
+        if (error) {
+            console.error("Error updating setting:", error);
+            alert("Failed to update setting");
+        } else {
+            setSettings(prev => prev.map(s => s.id === id ? { ...s, ...updatedSetting } : s));
+        }
+    };
+
+    const deleteSetting = async (id) => {
+        const { error } = await supabase.from('settings').delete().eq('id', id);
+        if (error) {
+            console.error("Error deleting setting:", error);
+            alert("Failed to delete setting");
+        } else {
+            setSettings(prev => prev.filter(s => s.id !== id));
+        }
+    };
+
+    // --- Fields Management ---
+    const addField = async (field) => {
+        const { data, error } = await supabase.from('fields').insert([{
+            name: field.name,
+            key: field.key,
+            type: field.type,
+            category_id: field.categoryId
+        }]).select();
+
+        if (error) {
+            console.error("Error adding field:", error);
+            alert("Failed to add field");
+        } else if (data) {
+            const newField = { ...data[0], categoryId: data[0].category_id };
+            setFields(prev => [...prev, newField]);
+        }
+    };
+
+    const updateField = async (id, updates) => {
+        // Map UI updates to DB columns
+        const dbUpdates = {};
+        if (updates.categoryId) dbUpdates.category_id = updates.categoryId;
+        if (updates.name) dbUpdates.name = updates.name;
+        if (updates.key) dbUpdates.key = updates.key;
+
+        const { error } = await supabase.from('fields').update(dbUpdates).eq('id', id);
+
+        if (error) {
+            console.error("Error updating field:", error);
+            alert("Failed to update field");
+        } else {
+            setFields(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
+        }
+    };
+
+    const removeField = async (id) => {
+        const { error } = await supabase.from('fields').delete().eq('id', id);
+        if (error) {
+            console.error("Error deleting field:", error);
+            alert("Failed to delete field");
+        } else {
+            setFields(prev => prev.filter(f => f.id !== id));
+        }
+    };
+
+    // --- Categories Management ---
+    const addCategory = async (name) => {
+        const { data, error } = await supabase.from('categories').insert([{ name }]).select();
+        if (error) {
+            console.error("Error adding category:", error);
+            alert("Failed to add category");
+        } else if (data) {
+            setCategories(prev => [...prev, data[0]]);
+        }
+    };
+
+    const updateCategory = async (id, name) => {
+        const { error } = await supabase.from('categories').update({ name }).eq('id', id);
+        if (error) {
+            console.error("Error updating category:", error);
+            alert("Failed to update category");
+        } else {
+            setCategories(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+        }
+    };
+
+    const deleteCategory = async (id) => {
+        // Check if fields exist locally first to save an API call
+        if (fields.some(f => f.categoryId === id)) {
+            alert("Cannot delete category with fields. Move fields first.");
+            return;
+        }
+
+        const { error } = await supabase.from('categories').delete().eq('id', id);
+        if (error) {
+            console.error("Error deleting category:", error);
+            alert("Failed to delete category");
+        } else {
+            setCategories(prev => prev.filter(c => c.id !== id));
+        }
+    };
+
+    // --- Feedback Management ---
+    const addFeedback = async (item) => {
+        const { error } = await supabase.from('feedback').insert([{
+            type: item.type,
+            message: item.message,
+            sku: item.sku,
+            status: 'pending'
+        }]);
+
+        if (error) {
+            console.error("Error submitting feedback:", error);
+            alert("Failed to submit feedback");
+        } else {
+            // Refetch or add optimistically. Since ID is generated by DB, refetching or ignoring local update is easiest.
+            // We'll just refetch feedback for admin view.
+            const { data } = await supabase.from('feedback').select('*');
+            if (data) setFeedback(data);
+        }
+    };
+
+    const resolveFeedback = async (id) => {
+        const { error } = await supabase.from('feedback').update({ status: 'resolved' }).eq('id', id);
+        if (error) {
+            console.error("Error resolving feedback:", error);
+        } else {
+            setFeedback(prev => prev.map(f => f.id === id ? { ...f, status: 'resolved' } : f));
+        }
+    };
+
+    const deleteFeedback = async (id) => {
+        const { error } = await supabase.from('feedback').delete().eq('id', id);
+        if (error) {
+            console.error("Error deleting feedback:", error);
+        } else {
+            setFeedback(prev => prev.filter(f => f.id !== id));
+        }
+    };
+
+    return (
+        <DataContext.Provider value={{
+            settings, addSetting, updateSetting, deleteSetting,
+            fields, addField, updateField, removeField,
+            categories, addCategory, updateCategory, deleteCategory,
+            feedback, addFeedback, resolveFeedback, deleteFeedback,
+            loading
+        }}>
+            {children}
+        </DataContext.Provider>
+    );
+};
+
+export const useData = () => useContext(DataContext);
