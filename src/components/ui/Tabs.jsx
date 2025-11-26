@@ -7,6 +7,7 @@ export const Tabs = ({ tabs, activeTab, onTabChange, className }) => {
             {tabs.map((tab) => (
                 <button
                     key={tab.id}
+                    type="button"
                     onClick={() => onTabChange(tab.id)}
                     className={cn(
                         "px-4 py-2 text-sm font-medium border-b-2 transition-colors",

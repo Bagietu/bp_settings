@@ -25,7 +25,9 @@ export const DataProvider = ({ children }) => {
                 // Flatten the 'data' JSONB column back into the object for the UI
                 const flattenedSettings = settingsRes.data.map(s => ({
                     ...s,
-                    ...s.data // Spread the JSONB fields (temp, speed, etc.) to top level
+                    ...s.data, // Spread the JSONB fields (temp, speed, etc.) to top level
+                    caseSize: s.case_size, // Map snake_case to camelCase
+                    legNumber: s.leg_number // Map snake_case to camelCase
                 }));
                 setSettings(flattenedSettings);
             }
