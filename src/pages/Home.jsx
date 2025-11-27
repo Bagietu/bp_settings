@@ -120,9 +120,36 @@ export const Home = () => {
                             onChange={handleLegChange}
                         >
                             <option value="">Select</option>
-                            {[...Array(10)].map((_, i) => (
-                                <option key={i + 1} value={(i + 1).toString()}>Leg {i + 1}</option>
-                            ))}
+                            <optgroup label="CP 26">
+                                <option value="4">Leg 4</option>
+                                <option value="5">Leg 5</option>
+                                <option value="6">Leg 6</option>
+                            </optgroup>
+                            <optgroup label="CP 27">
+                                <option value="7">Leg 7</option>
+                                <option value="8">Leg 8</option>
+                                <option value="9">Leg 9</option>
+                            </optgroup>
+                            <optgroup label="CP 30">
+                                <option value="18">Leg 18</option>
+                                <option value="17">Leg 17</option>
+                                <option value="16">Leg 16</option>
+                            </optgroup>
+                            <optgroup label="CP 31">
+                                <option value="15">Leg 15</option>
+                                <option value="14">Leg 14</option>
+                                <option value="13">Leg 13</option>
+                            </optgroup>
+                            <optgroup label="CP 23">
+                                <option value="12">Leg 12</option>
+                                <option value="11">Leg 11</option>
+                                <option value="10">Leg 10</option>
+                            </optgroup>
+                            <optgroup label="CP 22">
+                                <option value="3">Leg 3</option>
+                                <option value="2">Leg 2</option>
+                                <option value="1">Leg 1</option>
+                            </optgroup>
                         </select>
                     </div>
                     <div className="md:col-span-2">
