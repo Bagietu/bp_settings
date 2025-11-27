@@ -4,6 +4,8 @@ import { Search, MessageSquare, Settings, Menu, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 
+import logo from '../assets/logo.png';
+
 export const Layout = ({ children }) => {
     const location = useLocation();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -19,12 +21,10 @@ export const Layout = ({ children }) => {
             <nav className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">
                 <div className="container mx-auto px-4">
                     <div className="flex h-16 items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
-                                <Settings className="h-5 w-5 text-white" />
-                            </div>
-                            <span className="text-lg font-bold text-slate-900">Blueprint</span>
-                        </div>
+                        <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                            <img src={logo} alt="Logo" className="h-8 w-auto" />
+                            <span className="text-lg font-bold text-slate-900">Blueprint Settings</span>
+                        </Link>
 
                         {/* Desktop Nav */}
                         <div className="hidden md:flex items-center gap-6">
