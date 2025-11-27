@@ -16,8 +16,9 @@ export const Home = () => {
     const [skuSearch, setSkuSearch] = useState('');
 
     // UI State
-    const [searchResult, setSearchResult] = useState(null); // 'found', 'not_found', null
+    const [searchResult, setSearchResult] = useState(null); // 'suggestions', 'found', 'not_found', null
     const [foundSetting, setFoundSetting] = useState(null);
+    const [liveSuggestions, setLiveSuggestions] = useState([]);
     const [availableCaseSizes, setAvailableCaseSizes] = useState([]);
     const [selectedCaseSize, setSelectedCaseSize] = useState(null);
     const [availableSkus, setAvailableSkus] = useState([]);
@@ -26,33 +27,44 @@ export const Home = () => {
     const [selectedSettingDetails, setSelectedSettingDetails] = useState(null);
     const [activeCategory, setActiveCategory] = useState(categories[0]?.id || '');
 
-    const handleSearch = () => {
-        if (!legSearch || !skuSearch) return;
+    const handleSkuChange = (e) => {
+        const value = e.target.value;
+        setSkuSearch(value);
 
-        // Reset intermediate states
-        setSearchResult(null);
-        setFoundSetting(null);
-        setAvailableCaseSizes([]);
-        setSelectedCaseSize(null);
-        setAvailableSkus([]);
+        // Reset states if input is empty or leg not selected
+        if (!value || !legSearch) {
+            setSearchResult(null);
+            setFoundSetting(null);
+            setLiveSuggestions([]);
+            return;
+        }
 
-        // 1. Try to find exact match
-        const match = settings.find(s =>
+        // Filter for partial matches on the selected leg
+        const matches = settings.filter(s =>
             s.legNumber === legSearch &&
-            s.sku.toLowerCase() === skuSearch.toLowerCase()
+            s.sku.toLowerCase().includes(value.toLowerCase())
         );
 
-        if (match) {
-            setFoundSetting(match);
-            setSearchResult('found');
+        if (matches.length > 0) {
+            setLiveSuggestions(matches);
+            setSearchResult('suggestions');
         } else {
-            // 2. Not found - Find available case sizes for this leg
+            setLiveSuggestions([]);
+            // Fallback: Show available case sizes for this leg
             const legSettings = settings.filter(s => s.legNumber === legSearch);
             const uniqueCaseSizes = [...new Set(legSettings.map(s => s.caseSize))].filter(Boolean);
-
             setAvailableCaseSizes(uniqueCaseSizes);
             setSearchResult('not_found');
         }
+    };
+
+    // Handle Leg Change - Reset everything
+    const handleLegChange = (e) => {
+        setLegSearch(e.target.value);
+        setSkuSearch('');
+        setSearchResult(null);
+        setFoundSetting(null);
+        setLiveSuggestions([]);
     };
 
     const handleCaseSizeClick = (caseSize) => {
@@ -62,6 +74,12 @@ export const Home = () => {
             .filter(s => s.legNumber === legSearch && s.caseSize === caseSize)
             .map(s => s.sku);
         setAvailableSkus(skus);
+    };
+
+    const handleSuggestionClick = (setting) => {
+        setFoundSetting(setting);
+        setSearchResult('found');
+        setSkuSearch(setting.sku); // Auto-complete the input
     };
 
     const handleSkuClick = (sku) => {
@@ -87,19 +105,19 @@ export const Home = () => {
                     Blueprint Settings
                 </h1>
                 <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-                    Search by Leg Number and SKU.
+                    Select a Leg and start typing a SKU to search.
                 </p>
             </div>
 
             {/* Search Bar */}
             <div className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                     <div className="md:col-span-1">
                         <label className="text-sm font-medium text-slate-700 mb-1 block">Leg Number</label>
                         <select
                             className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                             value={legSearch}
-                            onChange={(e) => setLegSearch(e.target.value)}
+                            onChange={handleLegChange}
                         >
                             <option value="">Select</option>
                             {[...Array(10)].map((_, i) => (
@@ -112,18 +130,13 @@ export const Home = () => {
                         <div className="relative">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                             <Input
-                                placeholder="Enter SKU..."
+                                placeholder={legSearch ? "Start typing SKU..." : "Select Leg first"}
                                 className="pl-10"
                                 value={skuSearch}
-                                onChange={(e) => setSkuSearch(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                onChange={handleSkuChange}
+                                disabled={!legSearch}
                             />
                         </div>
-                    </div>
-                    <div className="md:col-span-1">
-                        <Button className="w-full" onClick={handleSearch} disabled={!legSearch || !skuSearch}>
-                            Search
-                        </Button>
                     </div>
                 </div>
             </div>
@@ -131,7 +144,34 @@ export const Home = () => {
             {/* Results Area */}
             <div className="max-w-4xl mx-auto">
 
-                {/* Case 1: Found Exact Match */}
+                {/* Case 1: Live Suggestions */}
+                {searchResult === 'suggestions' && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <h3 className="text-lg font-semibold text-slate-900">Found {liveSuggestions.length} matching SKUs</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {liveSuggestions.map(setting => (
+                                <Card
+                                    key={setting.id}
+                                    className="hover:shadow-md transition-all cursor-pointer border-slate-200 hover:border-blue-400 group"
+                                    onClick={() => handleSuggestionClick(setting)}
+                                >
+                                    <CardContent className="p-4 flex justify-between items-center">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <FileText className="h-4 w-4 text-slate-400 group-hover:text-blue-500" />
+                                                <span className="font-bold text-slate-700 group-hover:text-blue-600">{setting.sku}</span>
+                                            </div>
+                                            <p className="text-sm text-slate-500 mt-1">Case: {setting.caseSize}</p>
+                                        </div>
+                                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500" />
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Case 2: Found Exact Match (Selected) */}
                 {searchResult === 'found' && foundSetting && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <Card className="hover:shadow-md transition-shadow border-green-200 bg-green-50/30">
@@ -167,10 +207,19 @@ export const Home = () => {
                                 </Link>
                             </CardFooter>
                         </Card>
+
+                        <div className="mt-4 text-center">
+                            <Button variant="ghost" onClick={() => {
+                                setSearchResult('suggestions');
+                                setFoundSetting(null);
+                            }} className="text-slate-500">
+                                Back to results
+                            </Button>
+                        </div>
                     </div>
                 )}
 
-                {/* Case 2: Not Found - Show Fallback Flow */}
+                {/* Case 3: Not Found - Show Fallback Flow */}
                 {searchResult === 'not_found' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 flex items-start gap-3">
