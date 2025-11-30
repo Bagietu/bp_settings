@@ -27,7 +27,8 @@ export const DataProvider = ({ children }) => {
                     ...s,
                     ...s.data, // Spread the JSONB fields (temp, speed, etc.) to top level
                     caseSize: s.case_size, // Map snake_case to camelCase
-                    legNumber: s.leg_number // Map snake_case to camelCase
+                    legNumber: s.leg_number, // Map snake_case to camelCase
+                    lastUpdated: s.last_updated // Map snake_case to camelCase
                 }));
                 setSettings(flattenedSettings);
             }
@@ -52,6 +53,17 @@ export const DataProvider = ({ children }) => {
         fetchData();
     }, []);
 
+    // --- History Logging ---
+    const logHistory = async (action, details) => {
+        const userEmail = sessionStorage.getItem('userEmail') || 'unknown';
+        const { error } = await supabase.from('history').insert([{
+            user_email: userEmail,
+            action,
+            details
+        }]);
+        if (error) console.error("Error logging history:", error);
+    };
+
     // --- Settings Management ---
     const addSetting = async (newSetting) => {
         // Separate standard fields from dynamic fields
@@ -61,7 +73,7 @@ export const DataProvider = ({ children }) => {
             sku,
             leg_number: legNumber,
             case_size: caseSize,
-            program,
+            last_updated: new Date().toISOString(),
             data: dynamicData
         }]).select();
 
@@ -69,8 +81,9 @@ export const DataProvider = ({ children }) => {
             console.error("Error adding setting:", error);
             alert("Failed to add setting");
         } else if (data) {
-            const flattened = { ...data[0], ...data[0].data };
+            const flattened = { ...data[0], ...data[0].data, lastUpdated: data[0].last_updated };
             setSettings(prev => [...prev, flattened]);
+            logHistory('create', { sku, legNumber, caseSize });
         }
     };
 
@@ -81,7 +94,7 @@ export const DataProvider = ({ children }) => {
             sku,
             leg_number: legNumber,
             case_size: caseSize,
-            program,
+            last_updated: new Date().toISOString(),
             data: dynamicData
         }).eq('id', id);
 
@@ -89,17 +102,20 @@ export const DataProvider = ({ children }) => {
             console.error("Error updating setting:", error);
             alert("Failed to update setting");
         } else {
-            setSettings(prev => prev.map(s => s.id === id ? { ...s, ...updatedSetting } : s));
+            setSettings(prev => prev.map(s => s.id === id ? { ...s, ...updatedSetting, lastUpdated: new Date().toISOString() } : s));
+            logHistory('update', { id, sku, legNumber });
         }
     };
 
     const deleteSetting = async (id) => {
+        const setting = settings.find(s => s.id === id);
         const { error } = await supabase.from('settings').delete().eq('id', id);
         if (error) {
             console.error("Error deleting setting:", error);
             alert("Failed to delete setting");
         } else {
             setSettings(prev => prev.filter(s => s.id !== id));
+            logHistory('delete', { sku: setting?.sku, legNumber: setting?.legNumber });
         }
     };
 

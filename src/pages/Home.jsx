@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, ArrowRight, Eye, ChevronRight, Package, FileText } from 'lucide-react';
+import { Search, ArrowRight, Eye, ChevronRight, Package, FileText, CheckCircle } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -31,13 +31,7 @@ export const Home = () => {
         const value = e.target.value;
         setSkuSearch(value);
 
-        // Reset states if input is empty or leg not selected
-        if (!value || !legSearch) {
-            setSearchResult(null);
-            setFoundSetting(null);
-            setLiveSuggestions([]);
-            return;
-        }
+        if (!legSearch) return;
 
         // Filter for partial matches on the selected leg
         const matches = settings.filter(s =>
@@ -58,13 +52,22 @@ export const Home = () => {
         }
     };
 
-    // Handle Leg Change - Reset everything
+    // Handle Leg Change - Show all SKUs immediately
     const handleLegChange = (e) => {
-        setLegSearch(e.target.value);
+        const leg = e.target.value;
+        setLegSearch(leg);
         setSkuSearch('');
-        setSearchResult(null);
         setFoundSetting(null);
-        setLiveSuggestions([]);
+
+        if (leg) {
+            // Get all SKUs for this leg immediately
+            const legSettings = settings.filter(s => s.legNumber === leg);
+            setLiveSuggestions(legSettings);
+            setSearchResult('suggestions');
+        } else {
+            setLiveSuggestions([]);
+            setSearchResult(null);
+        }
     };
 
     const handleCaseSizeClick = (caseSize) => {
@@ -174,7 +177,9 @@ export const Home = () => {
                 {/* Case 1: Live Suggestions */}
                 {searchResult === 'suggestions' && (
                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <h3 className="text-lg font-semibold text-slate-900">Found {liveSuggestions.length} matching SKUs</h3>
+                        <h3 className="text-lg font-semibold text-slate-900">
+                            {skuSearch ? `Found ${liveSuggestions.length} matching SKUs` : `All SKUs for Leg ${legSearch}`}
+                        </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {liveSuggestions.map(setting => (
                                 <Card
@@ -219,8 +224,8 @@ export const Home = () => {
                                     <span className="font-medium">{foundSetting.caseSize}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Program</span>
-                                    <span className="font-medium">{foundSetting.program}</span>
+                                    <span className="text-slate-500">Last Updated</span>
+                                    <span className="font-medium">{foundSetting.lastUpdated ? new Date(foundSetting.lastUpdated).toLocaleDateString() : '-'}</span>
                                 </div>
                             </CardContent>
                             <CardFooter className="gap-2">
@@ -331,8 +336,8 @@ export const Home = () => {
                                 <p className="font-semibold text-lg">{selectedSettingDetails.caseSize}</p>
                             </div>
                             <div>
-                                <span className="text-xs text-slate-500 uppercase tracking-wider">Program</span>
-                                <p className="font-semibold text-lg">{selectedSettingDetails.program}</p>
+                                <span className="text-xs text-slate-500 uppercase tracking-wider">Last Updated</span>
+                                <p className="font-semibold text-lg">{selectedSettingDetails.lastUpdated ? new Date(selectedSettingDetails.lastUpdated).toLocaleDateString() : '-'}</p>
                             </div>
                         </div>
 
@@ -365,8 +370,3 @@ export const Home = () => {
         </div>
     );
 };
-
-// Helper Icon
-const CheckCircle = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-);

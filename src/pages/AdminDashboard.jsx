@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Edit2, Check, X, FolderPlus } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, FolderPlus, Users, Clock, Shield } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
 import { cn } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 
 export const AdminDashboard = () => {
     const navigate = useNavigate();
@@ -22,14 +23,47 @@ export const AdminDashboard = () => {
     const [editingItem, setEditingItem] = useState(null);
     const [activeCategoryTab, setActiveCategoryTab] = useState(categories[0]?.id || '');
 
+    // RBAC & History State
+    const [userRole, setUserRole] = useState('moderator');
+    const [users, setUsers] = useState([]);
+    const [history, setHistory] = useState([]);
+
     useEffect(() => {
-        if (!sessionStorage.getItem('isAdmin')) {
+        const isAdmin = sessionStorage.getItem('isAdmin');
+        const role = sessionStorage.getItem('userRole') || 'moderator';
+        setUserRole(role);
+
+        if (!isAdmin) {
             navigate('/admin');
+        } else {
+            if (role === 'admin') {
+                fetchUsers();
+                fetchHistory();
+            }
         }
     }, [navigate]);
 
+    const fetchUsers = async () => {
+        const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+        if (data) setUsers(data);
+    };
+
+    const fetchHistory = async () => {
+        const { data, error } = await supabase.from('history').select('*').order('created_at', { ascending: false }).limit(100);
+        if (data) setHistory(data);
+    };
+
+    const updateUserStatus = async (id, status) => {
+        const { error } = await supabase.from('profiles').update({ status }).eq('id', id);
+        if (!error) {
+            setUsers(prev => prev.map(u => u.id === id ? { ...u, status } : u));
+        }
+    };
+
     const handleLogout = () => {
         sessionStorage.removeItem('isAdmin');
+        sessionStorage.removeItem('userRole');
+        sessionStorage.removeItem('userEmail');
         navigate('/admin');
     };
 
@@ -38,7 +72,7 @@ export const AdminDashboard = () => {
 
     const openSettingModal = (setting = null) => {
         setEditingItem(setting);
-        setSettingForm(setting || { sku: '', caseSize: '', legNumber: '', program: '' }); // Added program
+        setSettingForm(setting || { sku: '', caseSize: '', legNumber: '' });
         setActiveCategoryTab(categories[0]?.id);
         setIsModalOpen(true);
     };
@@ -73,26 +107,42 @@ export const AdminDashboard = () => {
         }
     };
 
+    const tabs = [
+        { id: 'settings', label: 'Settings', icon: null },
+        { id: 'structure', label: 'Structure', icon: null },
+        { id: 'feedback', label: 'Feedback', icon: null },
+    ];
+
+    if (userRole === 'admin') {
+        tabs.push({ id: 'users', label: 'Users', icon: Users });
+        tabs.push({ id: 'history', label: 'History', icon: Clock });
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
+                <div className="flex items-center gap-3">
+                    <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
+                    {userRole === 'admin' && <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded uppercase">Admin</span>}
+                    {userRole === 'moderator' && <span className="bg-slate-100 text-slate-700 text-xs font-bold px-2 py-1 rounded uppercase">Moderator</span>}
+                </div>
                 <Button variant="ghost" onClick={handleLogout}>Logout</Button>
             </div>
 
-            <div className="flex space-x-1 border-b border-slate-200">
-                {['settings', 'structure', 'feedback'].map((tab) => (
+            <div className="flex space-x-1 border-b border-slate-200 overflow-x-auto">
+                {tabs.map((tab) => (
                     <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
                         className={cn(
-                            "px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize",
-                            activeTab === tab
+                            "px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize flex items-center gap-2 whitespace-nowrap",
+                            activeTab === tab.id
                                 ? "border-blue-600 text-blue-600"
                                 : "border-transparent text-slate-500 hover:text-slate-700"
                         )}
                     >
-                        {tab}
+                        {tab.icon && <tab.icon className="h-4 w-4" />}
+                        {tab.label}
                     </button>
                 ))}
             </div>
@@ -114,7 +164,7 @@ export const AdminDashboard = () => {
                                         <th className="p-4">SKU</th>
                                         <th className="p-4">Case Size</th>
                                         <th className="p-4">Leg</th>
-                                        <th className="p-4">Program</th>
+                                        <th className="p-4">Last Updated</th>
                                         <th className="p-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -124,7 +174,9 @@ export const AdminDashboard = () => {
                                             <td className="p-4 font-medium">{setting.sku}</td>
                                             <td className="p-4">{setting.caseSize}</td>
                                             <td className="p-4">{setting.legNumber}</td>
-                                            <td className="p-4">{setting.program}</td>
+                                            <td className="p-4 text-slate-500">
+                                                {setting.lastUpdated ? new Date(setting.lastUpdated).toLocaleString() : '-'}
+                                            </td>
                                             <td className="p-4 text-right space-x-2">
                                                 <Button variant="ghost" size="icon" onClick={() => openSettingModal(setting)}>
                                                     <Edit2 className="h-4 w-4 text-slate-500" />
@@ -228,7 +280,6 @@ export const AdminDashboard = () => {
                                                         <p className="text-xs text-slate-500">Key: {field.key}</p>
                                                     </div>
                                                     <div className="flex gap-1">
-                                                        {/* Simple Move Logic: Cycle through categories */}
                                                         <Button variant="ghost" size="icon" onClick={() => {
                                                             const nextCatIdx = (categories.findIndex(c => c.id === cat.id) + 1) % categories.length;
                                                             updateField(field.id, { categoryId: categories[nextCatIdx].id });
@@ -293,6 +344,93 @@ export const AdminDashboard = () => {
                 </div>
             )}
 
+            {/* USERS TAB (Admin Only) */}
+            {activeTab === 'users' && userRole === 'admin' && (
+                <div className="space-y-4">
+                    <div className="rounded-md border border-slate-200 bg-white overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-700 font-medium">
+                                <tr>
+                                    <th className="p-4">Email</th>
+                                    <th className="p-4">Role</th>
+                                    <th className="p-4">Status</th>
+                                    <th className="p-4">Joined</th>
+                                    <th className="p-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {users.map((user) => (
+                                    <tr key={user.id} className="hover:bg-slate-50">
+                                        <td className="p-4 font-medium">{user.email}</td>
+                                        <td className="p-4 capitalize">{user.role}</td>
+                                        <td className="p-4">
+                                            <span className={cn("px-2 py-1 rounded text-xs font-bold uppercase",
+                                                user.status === 'approved' ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                                            )}>
+                                                {user.status}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-slate-500">{new Date(user.created_at).toLocaleDateString()}</td>
+                                        <td className="p-4 text-right space-x-2">
+                                            {user.status === 'pending' && (
+                                                <>
+                                                    <Button size="sm" variant="ghost" onClick={() => updateUserStatus(user.id, 'approved')} className="text-green-600 hover:bg-green-50">
+                                                        Approve
+                                                    </Button>
+                                                    <Button size="sm" variant="ghost" onClick={() => updateUserStatus(user.id, 'rejected')} className="text-red-600 hover:bg-red-50">
+                                                        Reject
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* HISTORY TAB (Admin Only) */}
+            {activeTab === 'history' && userRole === 'admin' && (
+                <div className="space-y-4">
+                    <div className="rounded-md border border-slate-200 bg-white overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-700 font-medium">
+                                <tr>
+                                    <th className="p-4">Time</th>
+                                    <th className="p-4">User</th>
+                                    <th className="p-4">Action</th>
+                                    <th className="p-4">Details</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {history.map((log) => (
+                                    <tr key={log.id} className="hover:bg-slate-50">
+                                        <td className="p-4 text-slate-500 whitespace-nowrap">
+                                            {new Date(log.created_at).toLocaleString()}
+                                        </td>
+                                        <td className="p-4 font-medium">{log.user_email}</td>
+                                        <td className="p-4">
+                                            <span className={cn("px-2 py-1 rounded text-xs font-bold uppercase",
+                                                log.action === 'create' ? "bg-green-100 text-green-700" :
+                                                    log.action === 'delete' ? "bg-red-100 text-red-700" :
+                                                        "bg-blue-100 text-blue-700"
+                                            )}>
+                                                {log.action}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-slate-600 font-mono text-xs">
+                                            {JSON.stringify(log.details)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
             {/* SETTING MODAL */}
             <Modal
                 isOpen={isModalOpen}
@@ -322,13 +460,6 @@ export const AdminDashboard = () => {
                             <Input
                                 value={settingForm.legNumber || ''}
                                 onChange={e => setSettingForm({ ...settingForm, legNumber: e.target.value })}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Program</label>
-                            <Input
-                                value={settingForm.program || ''}
-                                onChange={e => setSettingForm({ ...settingForm, program: e.target.value })}
                             />
                         </div>
                     </div>
