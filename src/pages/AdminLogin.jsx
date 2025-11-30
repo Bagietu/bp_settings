@@ -20,11 +20,13 @@ export const AdminLogin = () => {
         setLoading(true);
         setError('');
 
+        const normalizedEmail = email.toLowerCase();
+
         try {
             if (isRegistering) {
                 // Registration Flow
                 const { data: authData, error: authError } = await supabase.auth.signUp({
-                    email,
+                    email: normalizedEmail,
                     password,
                 });
 
@@ -34,7 +36,7 @@ export const AdminLogin = () => {
                     // Create Profile
                     const { error: profileError } = await supabase.from('profiles').insert([{
                         id: authData.user.id,
-                        email: email,
+                        email: normalizedEmail,
                         first_name: firstName,
                         last_name: lastName,
                         role: 'moderator', // Default role
@@ -52,7 +54,7 @@ export const AdminLogin = () => {
             } else {
                 // Login Flow
                 const { data, error } = await supabase.auth.signInWithPassword({
-                    email,
+                    email: normalizedEmail,
                     password,
                 });
 
@@ -74,7 +76,7 @@ export const AdminLogin = () => {
                         // Fallback for existing users without profile
                         await supabase.from('profiles').insert([{
                             id: data.user.id,
-                            email: email,
+                            email: normalizedEmail,
                             role: 'moderator',
                             status: 'pending'
                         }]);
@@ -90,7 +92,7 @@ export const AdminLogin = () => {
 
                     sessionStorage.setItem('isAdmin', 'true');
                     sessionStorage.setItem('userRole', profile.role);
-                    sessionStorage.setItem('userEmail', email);
+                    sessionStorage.setItem('userEmail', normalizedEmail);
                     navigate('/admin/dashboard');
                 }
             }
