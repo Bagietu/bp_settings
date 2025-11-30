@@ -351,6 +351,7 @@ export const AdminDashboard = () => {
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-50 text-slate-700 font-medium">
                                 <tr>
+                                    <th className="p-4">Name</th>
                                     <th className="p-4">Email</th>
                                     <th className="p-4">Role</th>
                                     <th className="p-4">Status</th>
@@ -361,7 +362,12 @@ export const AdminDashboard = () => {
                             <tbody className="divide-y divide-slate-100">
                                 {users.map((user) => (
                                     <tr key={user.id} className="hover:bg-slate-50">
-                                        <td className="p-4 font-medium">{user.email}</td>
+                                        <td className="p-4 font-medium">
+                                            {user.first_name || user.last_name
+                                                ? `${user.first_name || ''} ${user.last_name || ''}`
+                                                : <span className="text-slate-400 italic">No Name</span>}
+                                        </td>
+                                        <td className="p-4">{user.email}</td>
                                         <td className="p-4 capitalize">{user.role}</td>
                                         <td className="p-4">
                                             <span className={cn("px-2 py-1 rounded text-xs font-bold uppercase",

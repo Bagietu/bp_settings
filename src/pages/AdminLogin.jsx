@@ -8,6 +8,8 @@ import { supabase } from '../lib/supabase';
 export const AdminLogin = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
     const [isRegistering, setIsRegistering] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -33,13 +35,14 @@ export const AdminLogin = () => {
                     const { error: profileError } = await supabase.from('profiles').insert([{
                         id: authData.user.id,
                         email: email,
+                        first_name: firstName,
+                        last_name: lastName,
                         role: 'moderator', // Default role
                         status: 'pending' // Default status
                     }]);
 
                     if (profileError) {
                         console.error("Profile creation failed:", profileError);
-                        // Optional: Delete auth user if profile fails? For now just show error.
                         throw new Error("Failed to create user profile.");
                     }
 
@@ -68,9 +71,7 @@ export const AdminLogin = () => {
                     }
 
                     if (!profile) {
-                        // Fallback for existing users without profile (auto-create admin if it's the first one? No, just deny for now or assume admin if hardcoded check passed before)
-                        // For this migration, let's assume if no profile, we deny or create a pending one.
-                        // Let's create a pending profile if missing.
+                        // Fallback for existing users without profile
                         await supabase.from('profiles').insert([{
                             id: data.user.id,
                             email: email,
@@ -87,9 +88,9 @@ export const AdminLogin = () => {
                         return;
                     }
 
-                    sessionStorage.setItem('isAdmin', 'true'); // Legacy check
-                    sessionStorage.setItem('userRole', profile.role); // New Role check
-                    sessionStorage.setItem('userEmail', email); // For history logging
+                    sessionStorage.setItem('isAdmin', 'true');
+                    sessionStorage.setItem('userRole', profile.role);
+                    sessionStorage.setItem('userEmail', email);
                     navigate('/admin/dashboard');
                 }
             }
@@ -117,6 +118,29 @@ export const AdminLogin = () => {
                 </div>
 
                 <form onSubmit={handleAuth} className="space-y-4">
+                    {isRegistering && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-slate-700">First Name</label>
+                                <Input
+                                    placeholder="John"
+                                    value={firstName}
+                                    onChange={(e) => setFirstName(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-slate-700">Last Name</label>
+                                <Input
+                                    placeholder="Doe"
+                                    value={lastName}
+                                    onChange={(e) => setLastName(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700">Email</label>
                         <Input
