@@ -407,7 +407,8 @@ export const AdminDashboard = () => {
                                     <th className="p-4">Time</th>
                                     <th className="p-4">User</th>
                                     <th className="p-4">Action</th>
-                                    <th className="p-4">Details</th>
+                                    <th className="p-4">Summary</th>
+                                    <th className="p-4 text-right">Details</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -426,8 +427,17 @@ export const AdminDashboard = () => {
                                                 {log.action}
                                             </span>
                                         </td>
-                                        <td className="p-4 text-slate-600 font-mono text-xs">
-                                            {JSON.stringify(log.details)}
+                                        <td className="p-4 text-slate-600">
+                                            {log.action === 'update' && log.details.changes ? (
+                                                <span>Updated {Object.keys(log.details.changes).length} field(s) for SKU {log.details.sku}</span>
+                                            ) : (
+                                                <span>{log.action}d SKU {log.details.sku}</span>
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <Button variant="ghost" size="sm" onClick={() => setViewingHistoryItem(log)}>
+                                                View Details
+                                            </Button>
                                         </td>
                                     </tr>
                                 ))}
@@ -436,6 +446,74 @@ export const AdminDashboard = () => {
                     </div>
                 </div>
             )}
+
+            {/* HISTORY DETAILS MODAL */}
+            <Modal
+                isOpen={!!viewingHistoryItem}
+                onClose={() => setViewingHistoryItem(null)}
+                title="History Details"
+                className="max-w-2xl"
+            >
+                {viewingHistoryItem && (
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                            <div>
+                                <p className="text-sm text-slate-500">Action</p>
+                                <p className="font-bold capitalize text-lg">{viewingHistoryItem.action}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-sm text-slate-500">Date</p>
+                                <p className="font-medium">{new Date(viewingHistoryItem.created_at).toLocaleString()}</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-4 rounded-lg space-y-2">
+                            <p className="text-sm font-medium text-slate-700">User: <span className="font-normal">{viewingHistoryItem.user_email}</span></p>
+                            <p className="text-sm font-medium text-slate-700">SKU: <span className="font-normal">{viewingHistoryItem.details.sku}</span></p>
+                            <p className="text-sm font-medium text-slate-700">Leg: <span className="font-normal">{viewingHistoryItem.details.legNumber}</span></p>
+                        </div>
+
+                        {viewingHistoryItem.action === 'update' && viewingHistoryItem.details.changes && (
+                            <div className="space-y-2">
+                                <h4 className="font-medium text-slate-900">Changes</h4>
+                                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-slate-50 text-slate-700">
+                                            <tr>
+                                                <th className="p-2 text-left">Field</th>
+                                                <th className="p-2 text-left text-red-600">Before</th>
+                                                <th className="p-2 text-left text-green-600">After</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 bg-white">
+                                            {Object.entries(viewingHistoryItem.details.changes).map(([key, change]) => (
+                                                <tr key={key}>
+                                                    <td className="p-2 font-medium text-slate-700">{key}</td>
+                                                    <td className="p-2 text-red-600 bg-red-50">{String(change.from)}</td>
+                                                    <td className="p-2 text-green-600 bg-green-50">{String(change.to)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {viewingHistoryItem.action !== 'update' && (
+                            <div className="space-y-2">
+                                <h4 className="font-medium text-slate-900">Raw Data</h4>
+                                <pre className="bg-slate-900 text-slate-50 p-4 rounded-lg overflow-x-auto text-xs">
+                                    {JSON.stringify(viewingHistoryItem.details, null, 2)}
+                                </pre>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end pt-4">
+                            <Button onClick={() => setViewingHistoryItem(null)}>Close</Button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
 
             {/* SETTING MODAL */}
             <Modal

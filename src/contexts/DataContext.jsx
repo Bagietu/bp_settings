@@ -55,7 +55,13 @@ export const DataProvider = ({ children }) => {
 
     // --- History Logging ---
     const logHistory = async (action, details) => {
-        const userEmail = sessionStorage.getItem('userEmail') || 'unknown';
+        let userEmail = sessionStorage.getItem('userEmail');
+
+        if (!userEmail) {
+            const { data: { user } } = await supabase.auth.getUser();
+            userEmail = user?.email || 'unknown';
+        }
+
         const { error } = await supabase.from('history').insert([{
             user_email: userEmail,
             action,
@@ -83,11 +89,12 @@ export const DataProvider = ({ children }) => {
         } else if (data) {
             const flattened = { ...data[0], ...data[0].data, lastUpdated: data[0].last_updated };
             setSettings(prev => [...prev, flattened]);
-            logHistory('create', { sku, legNumber, caseSize });
+            logHistory('create', { sku, legNumber, caseSize, data: dynamicData });
         }
     };
 
     const updateSetting = async (id, updatedSetting) => {
+        const oldSetting = settings.find(s => s.id === id);
         const { sku, legNumber, caseSize, program, ...dynamicData } = updatedSetting;
 
         const { error } = await supabase.from('settings').update({
@@ -103,7 +110,22 @@ export const DataProvider = ({ children }) => {
             alert("Failed to update setting");
         } else {
             setSettings(prev => prev.map(s => s.id === id ? { ...s, ...updatedSetting, lastUpdated: new Date().toISOString() } : s));
-            logHistory('update', { id, sku, legNumber });
+
+            // Calculate Diff
+            const changes = {};
+            // Check standard fields
+            if (oldSetting.sku !== sku) changes.sku = { from: oldSetting.sku, to: sku };
+            if (oldSetting.caseSize !== caseSize) changes.caseSize = { from: oldSetting.caseSize, to: caseSize };
+            if (oldSetting.legNumber !== legNumber) changes.legNumber = { from: oldSetting.legNumber, to: legNumber };
+
+            // Check dynamic fields
+            Object.keys(dynamicData).forEach(key => {
+                if (oldSetting[key] !== dynamicData[key]) {
+                    changes[key] = { from: oldSetting[key], to: dynamicData[key] };
+                }
+            });
+
+            logHistory('update', { id, sku, legNumber, changes });
         }
     };
 
@@ -115,7 +137,7 @@ export const DataProvider = ({ children }) => {
             alert("Failed to delete setting");
         } else {
             setSettings(prev => prev.filter(s => s.id !== id));
-            logHistory('delete', { sku: setting?.sku, legNumber: setting?.legNumber });
+            logHistory('delete', { sku: setting?.sku, legNumber: setting?.legNumber, backup: setting });
         }
     };
 
