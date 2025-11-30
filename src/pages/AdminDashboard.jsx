@@ -428,10 +428,10 @@ export const AdminDashboard = () => {
                                             </span>
                                         </td>
                                         <td className="p-4 text-slate-600">
-                                            {log.action === 'update' && log.details.changes ? (
-                                                <span>Updated {Object.keys(log.details.changes).length} field(s) for SKU {log.details.sku}</span>
+                                            {log.action === 'update' && log.details?.changes ? (
+                                                <span>Updated {Object.keys(log.details.changes).length} field(s) for SKU {log.details?.sku || '?'}</span>
                                             ) : (
-                                                <span>{log.action}d SKU {log.details.sku}</span>
+                                                <span>{log.action}d SKU {log.details?.sku || '?'}</span>
                                             )}
                                         </td>
                                         <td className="p-4 text-right">
@@ -469,11 +469,11 @@ export const AdminDashboard = () => {
 
                         <div className="bg-slate-50 p-4 rounded-lg space-y-2">
                             <p className="text-sm font-medium text-slate-700">User: <span className="font-normal">{viewingHistoryItem.user_email}</span></p>
-                            <p className="text-sm font-medium text-slate-700">SKU: <span className="font-normal">{viewingHistoryItem.details.sku}</span></p>
-                            <p className="text-sm font-medium text-slate-700">Leg: <span className="font-normal">{viewingHistoryItem.details.legNumber}</span></p>
+                            <p className="text-sm font-medium text-slate-700">SKU: <span className="font-normal">{viewingHistoryItem.details?.sku || '-'}</span></p>
+                            <p className="text-sm font-medium text-slate-700">Leg: <span className="font-normal">{viewingHistoryItem.details?.legNumber || '-'}</span></p>
                         </div>
 
-                        {viewingHistoryItem.action === 'update' && viewingHistoryItem.details.changes && (
+                        {viewingHistoryItem.action === 'update' && viewingHistoryItem.details?.changes && (
                             <div className="space-y-2">
                                 <h4 className="font-medium text-slate-900">Changes</h4>
                                 <div className="border border-slate-200 rounded-lg overflow-hidden">
@@ -489,8 +489,8 @@ export const AdminDashboard = () => {
                                             {Object.entries(viewingHistoryItem.details.changes).map(([key, change]) => (
                                                 <tr key={key}>
                                                     <td className="p-2 font-medium text-slate-700">{key}</td>
-                                                    <td className="p-2 text-red-600 bg-red-50">{String(change.from)}</td>
-                                                    <td className="p-2 text-green-600 bg-green-50">{String(change.to)}</td>
+                                                    <td className="p-2 text-red-600 bg-red-50">{String(change?.from ?? '-')}</td>
+                                                    <td className="p-2 text-green-600 bg-green-50">{String(change?.to ?? '-')}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
