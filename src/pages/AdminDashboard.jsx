@@ -27,6 +27,7 @@ export const AdminDashboard = () => {
     const [userRole, setUserRole] = useState('moderator');
     const [users, setUsers] = useState([]);
     const [history, setHistory] = useState([]);
+    const [viewingHistoryItem, setViewingHistoryItem] = useState(null);
 
     useEffect(() => {
         const isAdmin = sessionStorage.getItem('isAdmin');
