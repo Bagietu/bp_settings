@@ -49,6 +49,36 @@ export const DataProvider = ({ children }) => {
         }
     };
 
+    const [user, setUser] = useState(null);
+
+    // Initialize User from Session
+    useEffect(() => {
+        const isAdmin = sessionStorage.getItem('isAdmin');
+        const role = sessionStorage.getItem('userRole');
+        const email = sessionStorage.getItem('userEmail');
+        if (isAdmin) {
+            setUser({ role, email });
+        }
+    }, []);
+
+    // Auth Methods
+    const login = (userData) => {
+        sessionStorage.setItem('isAdmin', 'true');
+        sessionStorage.setItem('userRole', userData.role);
+        sessionStorage.setItem('userEmail', userData.email);
+        setUser(userData);
+    };
+
+    const logout = async () => {
+        await supabase.auth.signOut();
+        sessionStorage.removeItem('isAdmin');
+        sessionStorage.removeItem('userRole');
+        sessionStorage.removeItem('userEmail');
+        localStorage.removeItem('sessionExpiry');
+        setUser(null);
+        window.location.href = '/admin'; // Redirect to login page
+    };
+
     useEffect(() => {
         fetchData();
 
@@ -57,12 +87,7 @@ export const DataProvider = ({ children }) => {
             const expiry = localStorage.getItem('sessionExpiry');
             if (expiry && Date.now() > parseInt(expiry, 10)) {
                 console.log("Session expired. Logging out.");
-                await supabase.auth.signOut();
-                localStorage.removeItem('sessionExpiry');
-                sessionStorage.removeItem('isAdmin');
-                sessionStorage.removeItem('userRole');
-                sessionStorage.removeItem('userEmail');
-                window.location.reload();
+                logout();
             }
         };
 
@@ -288,7 +313,8 @@ export const DataProvider = ({ children }) => {
             fields, addField, updateField, removeField,
             categories, addCategory, updateCategory, deleteCategory,
             feedback, addFeedback, resolveFeedback, deleteFeedback,
-            loading
+            loading,
+            user, login, logout
         }}>
             {children}
         </DataContext.Provider>

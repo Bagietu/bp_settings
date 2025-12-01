@@ -15,7 +15,8 @@ export const AdminDashboard = () => {
         settings, addSetting, updateSetting, deleteSetting,
         fields, addField, updateField, removeField,
         categories, addCategory, updateCategory, deleteCategory,
-        feedback, resolveFeedback, deleteFeedback
+        feedback, resolveFeedback, deleteFeedback,
+        logout
     } = useData();
 
     const [activeTab, setActiveTab] = useState('settings');
@@ -76,10 +77,7 @@ export const AdminDashboard = () => {
     };
 
     const handleLogout = () => {
-        sessionStorage.removeItem('isAdmin');
-        sessionStorage.removeItem('userRole');
-        sessionStorage.removeItem('userEmail');
-        navigate('/admin');
+        logout();
     };
 
     // Settings Form State

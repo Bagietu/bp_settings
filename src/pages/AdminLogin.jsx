@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Loader2 } from 'lucide-react';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { supabase } from '../lib/supabase';
+import { useData } from '../contexts/DataContext';
 
 export const AdminLogin = () => {
+    const { login } = useData();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [firstName, setFirstName] = useState('');
@@ -83,10 +85,6 @@ export const AdminLogin = () => {
                         return;
                     }
 
-                    sessionStorage.setItem('isAdmin', 'true');
-                    sessionStorage.setItem('userRole', profile.role);
-                    sessionStorage.setItem('userEmail', normalizedEmail);
-
                     // Handle "Remember Me" logic
                     if (!rememberMe) {
                         // Set a timeout to log out after 15 minutes (900,000 ms)
@@ -101,6 +99,7 @@ export const AdminLogin = () => {
                         localStorage.removeItem('sessionExpiry');
                     }
 
+                    login({ role: profile.role, email: normalizedEmail });
                     navigate('/admin/dashboard');
                 }
             }

@@ -1,19 +1,23 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, MessageSquare, Settings, Menu, X } from 'lucide-react';
+import { Search, MessageSquare, Settings, Menu, X, LogIn } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
+import { useData } from '../contexts/DataContext';
 
 import logo from '../assets/logo.png';
 
 export const Layout = ({ children }) => {
     const location = useLocation();
+    const { user } = useData();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
     const navItems = [
         { path: '/', label: 'Search', icon: Search },
         { path: '/feedback', label: 'Feedback', icon: MessageSquare },
-        { path: '/admin', label: 'Admin', icon: Settings },
+        user
+            ? { path: '/admin/dashboard', label: 'Admin', icon: Settings }
+            : { path: '/admin', label: 'Login/Register', icon: LogIn },
     ];
 
     return (
