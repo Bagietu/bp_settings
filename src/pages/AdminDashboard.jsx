@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Edit2, Check, X, FolderPlus, Users, Clock, Shield } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, FolderPlus, Users, Clock, Shield, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -33,6 +33,9 @@ export const AdminDashboard = () => {
 
     // Config State
     const [configForm, setConfigForm] = useState({ vote_period_days: '7' });
+
+    // Status Modal State
+    const [statusModal, setStatusModal] = useState({ isOpen: false, type: 'success', message: '' });
 
     useEffect(() => {
         const isAdmin = sessionStorage.getItem('isAdmin');
@@ -70,7 +73,8 @@ export const AdminDashboard = () => {
         const { error } = await supabase.from('history').delete().eq('id', id);
         if (error) {
             console.error("Error deleting history:", error);
-            alert("Failed to delete history item");
+            console.error("Error deleting history:", error);
+            setStatusModal({ isOpen: true, type: 'error', message: "Failed to delete history item" });
         } else {
             setHistory(prev => prev.filter(h => h.id !== id));
         }
@@ -90,7 +94,8 @@ export const AdminDashboard = () => {
     const handleSaveConfig = (e) => {
         e.preventDefault();
         updateAppConfig('vote_period_days', configForm.vote_period_days);
-        alert("Configuration saved!");
+        updateAppConfig('vote_period_days', configForm.vote_period_days);
+        setStatusModal({ isOpen: true, type: 'success', message: "Configuration saved!" });
     };
 
     // Settings Form State
@@ -103,33 +108,50 @@ export const AdminDashboard = () => {
         setIsModalOpen(true);
     };
 
-    const saveSetting = (e) => {
+    const saveSetting = async (e) => {
         e.preventDefault();
+        let result;
         if (editingItem) {
-            updateSetting(editingItem.id, settingForm);
+            result = await updateSetting(editingItem.id, settingForm);
         } else {
-            addSetting(settingForm);
+            result = await addSetting(settingForm);
         }
-        setIsModalOpen(false);
+
+        if (result.success) {
+            setIsModalOpen(false);
+            setStatusModal({ isOpen: true, type: 'success', message: editingItem ? "Setting updated!" : "Setting added!" });
+        } else {
+            setStatusModal({ isOpen: true, type: 'error', message: result.message });
+        }
     };
 
     // Fields & Categories Form State
     const [newField, setNewField] = useState({ name: '', key: '', type: 'text', categoryId: categories[0]?.id || '' });
     const [newCategory, setNewCategory] = useState('');
 
-    const handleAddField = (e) => {
+    const handleAddField = async (e) => {
         e.preventDefault();
         if (newField.name && newField.key && newField.categoryId) {
-            addField(newField);
-            setNewField({ ...newField, name: '', key: '', type: 'text' });
+            const result = await addField(newField);
+            if (result.success) {
+                setNewField({ ...newField, name: '', key: '', type: 'text' });
+                setStatusModal({ isOpen: true, type: 'success', message: "Field added!" });
+            } else {
+                setStatusModal({ isOpen: true, type: 'error', message: result.message });
+            }
         }
     };
 
-    const handleAddCategory = (e) => {
+    const handleAddCategory = async (e) => {
         e.preventDefault();
         if (newCategory) {
-            addCategory(newCategory);
-            setNewCategory('');
+            const result = await addCategory(newCategory);
+            if (result.success) {
+                setNewCategory('');
+                setStatusModal({ isOpen: true, type: 'success', message: "Category added!" });
+            } else {
+                setStatusModal({ isOpen: true, type: 'error', message: result.message });
+            }
         }
     };
 
@@ -209,7 +231,12 @@ export const AdminDashboard = () => {
                                                 <Button variant="ghost" size="icon" onClick={() => openSettingModal(setting)}>
                                                     <Edit2 className="h-4 w-4 text-slate-500" />
                                                 </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => deleteSetting(setting.id)}>
+                                                <Button variant="ghost" size="icon" onClick={async () => {
+                                                    if (window.confirm("Delete this setting?")) {
+                                                        const res = await deleteSetting(setting.id);
+                                                        if (!res.success) setStatusModal({ isOpen: true, type: 'error', message: res.message });
+                                                    }
+                                                }}>
                                                     <Trash2 className="h-4 w-4 text-red-500" />
                                                 </Button>
                                             </td>
@@ -240,7 +267,12 @@ export const AdminDashboard = () => {
                             {categories.map(cat => (
                                 <div key={cat.id} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg">
                                     <span>{cat.name}</span>
-                                    <Button variant="ghost" size="icon" onClick={() => deleteCategory(cat.id)}>
+                                    <Button variant="ghost" size="icon" onClick={async () => {
+                                        if (window.confirm("Delete this category?")) {
+                                            const res = await deleteCategory(cat.id);
+                                            if (!res.success) setStatusModal({ isOpen: true, type: 'error', message: res.message });
+                                        }
+                                    }}>
                                         <Trash2 className="h-4 w-4 text-red-500" />
                                     </Button>
                                 </div>
@@ -308,13 +340,19 @@ export const AdminDashboard = () => {
                                                         <p className="text-xs text-slate-500">Key: {field.key}</p>
                                                     </div>
                                                     <div className="flex gap-1">
-                                                        <Button variant="ghost" size="icon" onClick={() => {
+                                                        <Button variant="ghost" size="icon" onClick={async () => {
                                                             const nextCatIdx = (categories.findIndex(c => c.id === cat.id) + 1) % categories.length;
-                                                            updateField(field.id, { categoryId: categories[nextCatIdx].id });
+                                                            const res = await updateField(field.id, { categoryId: categories[nextCatIdx].id });
+                                                            if (!res.success) setStatusModal({ isOpen: true, type: 'error', message: res.message });
                                                         }}>
                                                             <FolderPlus className="h-4 w-4 text-blue-500" />
                                                         </Button>
-                                                        <Button variant="ghost" size="icon" onClick={() => removeField(field.id)}>
+                                                        <Button variant="ghost" size="icon" onClick={async () => {
+                                                            if (window.confirm("Delete this field?")) {
+                                                                const res = await removeField(field.id);
+                                                                if (!res.success) setStatusModal({ isOpen: true, type: 'error', message: res.message });
+                                                            }
+                                                        }}>
                                                             <Trash2 className="h-4 w-4 text-red-500" />
                                                         </Button>
                                                     </div>
@@ -351,11 +389,19 @@ export const AdminDashboard = () => {
                                         </div>
                                         <div className="flex gap-2">
                                             {item.status !== 'resolved' && (
-                                                <Button size="sm" variant="ghost" onClick={() => resolveFeedback(item.id)} className="text-green-600 hover:text-green-700 hover:bg-green-50">
+                                                <Button size="sm" variant="ghost" onClick={async () => {
+                                                    const res = await resolveFeedback(item.id);
+                                                    if (res && !res.success) setStatusModal({ isOpen: true, type: 'error', message: res.message });
+                                                }} className="text-green-600 hover:text-green-700 hover:bg-green-50">
                                                     <Check className="h-4 w-4 mr-1" /> Resolve
                                                 </Button>
                                             )}
-                                            <Button size="sm" variant="ghost" onClick={() => deleteFeedback(item.id)} className="text-red-500 hover:text-red-600 hover:bg-red-50">
+                                            <Button size="sm" variant="ghost" onClick={async () => {
+                                                if (window.confirm("Delete this feedback?")) {
+                                                    const res = await deleteFeedback(item.id);
+                                                    if (res && !res.success) setStatusModal({ isOpen: true, type: 'error', message: res.message });
+                                                }
+                                            }} className="text-red-500 hover:text-red-600 hover:bg-red-50">
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </div>
@@ -689,6 +735,36 @@ export const AdminDashboard = () => {
                         <Button type="submit">Save Setting</Button>
                     </div>
                 </form>
+            </Modal>
+            {/* STATUS MODAL */}
+            <Modal
+                isOpen={statusModal.isOpen}
+                onClose={() => setStatusModal({ ...statusModal, isOpen: false })}
+                title={statusModal.type === 'success' ? 'Success' : statusModal.type === 'error' ? 'Error' : 'Notice'}
+                className="max-w-sm"
+            >
+                <div className="text-center space-y-4 py-4">
+                    <div className="flex justify-center">
+                        <div className={`p-3 rounded-full ${statusModal.type === 'success' ? 'bg-green-100' :
+                            statusModal.type === 'error' ? 'bg-red-100' : 'bg-amber-100'
+                            }`}>
+                            {statusModal.type === 'success' && <CheckCircle className="h-8 w-8 text-green-600" />}
+                            {statusModal.type === 'error' && <AlertCircle className="h-8 w-8 text-red-600" />}
+                            {statusModal.type === 'warning' && <AlertCircle className="h-8 w-8 text-amber-600" />}
+                            {statusModal.type === 'info' && <Info className="h-8 w-8 text-blue-600" />}
+                        </div>
+                    </div>
+                    <p className="text-lg font-medium text-slate-900">{statusModal.message}</p>
+                    <Button
+                        onClick={() => setStatusModal({ ...statusModal, isOpen: false })}
+                        className={`w-full ${statusModal.type === 'success' ? 'bg-green-600 hover:bg-green-700' :
+                            statusModal.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
+                                'bg-slate-900 hover:bg-slate-800'
+                            }`}
+                    >
+                        OK
+                    </Button>
+                </div>
             </Modal>
         </div>
     );

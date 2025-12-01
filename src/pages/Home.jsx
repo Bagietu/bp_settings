@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, ArrowRight, Eye, ChevronRight, Package, FileText, CheckCircle, ThumbsUp, ArrowUpDown } from 'lucide-react';
+import { Search, ArrowRight, Eye, ChevronRight, Package, FileText, CheckCircle, ThumbsUp, ArrowUpDown, AlertCircle, Info } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -21,8 +21,8 @@ export const Home = () => {
     const [selectedSettingDetails, setSelectedSettingDetails] = useState(null);
     const [activeCategory, setActiveCategory] = useState(categories[0]?.id || '');
 
-    // Success Modal State
-    const [successModal, setSuccessModal] = useState({ isOpen: false, message: '' });
+    // Status Modal State
+    const [statusModal, setStatusModal] = useState({ isOpen: false, type: 'success', message: '' });
 
     // Derived Data
     const availableCaseSizes = useMemo(() => {
@@ -76,9 +76,14 @@ export const Home = () => {
     const handleVote = async (settingId) => {
         const result = await addVote(settingId);
         if (result.success) {
-            setSuccessModal({ isOpen: true, message: result.message });
+            setStatusModal({ isOpen: true, type: 'success', message: result.message });
         } else {
-            alert(result.message);
+            // Determine type based on message content for better UX
+            let type = 'error';
+            if (result.message.includes("Login required")) type = 'info';
+            if (result.message.includes("already voted")) type = 'warning';
+
+            setStatusModal({ isOpen: true, type, message: result.message });
         }
     };
 
@@ -350,23 +355,31 @@ export const Home = () => {
                 )}
             </Modal>
 
-            {/* Success Modal */}
+            {/* Status Modal (Success/Error/Warning) */}
             <Modal
-                isOpen={successModal.isOpen}
-                onClose={() => setSuccessModal({ ...successModal, isOpen: false })}
-                title="Success"
+                isOpen={statusModal.isOpen}
+                onClose={() => setStatusModal({ ...statusModal, isOpen: false })}
+                title={statusModal.type === 'success' ? 'Success' : statusModal.type === 'error' ? 'Error' : 'Notice'}
                 className="max-w-sm"
             >
                 <div className="text-center space-y-4 py-4">
                     <div className="flex justify-center">
-                        <div className="bg-green-100 p-3 rounded-full">
-                            <CheckCircle className="h-8 w-8 text-green-600" />
+                        <div className={`p-3 rounded-full ${statusModal.type === 'success' ? 'bg-green-100' :
+                                statusModal.type === 'error' ? 'bg-red-100' : 'bg-amber-100'
+                            }`}>
+                            {statusModal.type === 'success' && <CheckCircle className="h-8 w-8 text-green-600" />}
+                            {statusModal.type === 'error' && <AlertCircle className="h-8 w-8 text-red-600" />}
+                            {statusModal.type === 'warning' && <AlertCircle className="h-8 w-8 text-amber-600" />}
+                            {statusModal.type === 'info' && <Info className="h-8 w-8 text-blue-600" />}
                         </div>
                     </div>
-                    <p className="text-lg font-medium text-slate-900">{successModal.message}</p>
+                    <p className="text-lg font-medium text-slate-900">{statusModal.message}</p>
                     <Button
-                        onClick={() => setSuccessModal({ ...successModal, isOpen: false })}
-                        className="w-full"
+                        onClick={() => setStatusModal({ ...statusModal, isOpen: false })}
+                        className={`w-full ${statusModal.type === 'success' ? 'bg-green-600 hover:bg-green-700' :
+                                statusModal.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
+                                    'bg-slate-900 hover:bg-slate-800'
+                            }`}
                     >
                         OK
                     </Button>

@@ -142,11 +142,12 @@ export const DataProvider = ({ children }) => {
 
         if (error) {
             console.error("Error adding setting:", error);
-            alert("Failed to add setting");
+            return { success: false, message: "Failed to add setting" };
         } else if (data) {
             const flattened = { ...data[0], ...data[0].data, lastUpdated: data[0].last_updated };
             setSettings(prev => [...prev, flattened]);
             logHistory('create', { sku, legNumber, caseSize, data: dynamicData });
+            return { success: true };
         }
     };
 
@@ -164,7 +165,7 @@ export const DataProvider = ({ children }) => {
 
         if (error) {
             console.error("Error updating setting:", error);
-            alert("Failed to update setting");
+            return { success: false, message: "Failed to update setting" };
         } else {
             setSettings(prev => prev.map(s => s.id === id ? { ...s, ...updatedSetting, lastUpdated: new Date().toISOString() } : s));
 
@@ -183,6 +184,7 @@ export const DataProvider = ({ children }) => {
             });
 
             logHistory('update', { id, sku, legNumber, changes });
+            return { success: true };
         }
     };
 
@@ -191,10 +193,11 @@ export const DataProvider = ({ children }) => {
         const { error } = await supabase.from('settings').delete().eq('id', id);
         if (error) {
             console.error("Error deleting setting:", error);
-            alert("Failed to delete setting");
+            return { success: false, message: "Failed to delete setting" };
         } else {
             setSettings(prev => prev.filter(s => s.id !== id));
             logHistory('delete', { sku: setting?.sku, legNumber: setting?.legNumber, backup: setting });
+            return { success: true };
         }
     };
 
@@ -209,10 +212,11 @@ export const DataProvider = ({ children }) => {
 
         if (error) {
             console.error("Error adding field:", error);
-            alert("Failed to add field");
+            return { success: false, message: "Failed to add field" };
         } else if (data) {
             const newField = { ...data[0], categoryId: data[0].category_id };
             setFields(prev => [...prev, newField]);
+            return { success: true };
         }
     };
 
@@ -227,9 +231,10 @@ export const DataProvider = ({ children }) => {
 
         if (error) {
             console.error("Error updating field:", error);
-            alert("Failed to update field");
+            return { success: false, message: "Failed to update field" };
         } else {
             setFields(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
+            return { success: true };
         }
     };
 
@@ -237,9 +242,10 @@ export const DataProvider = ({ children }) => {
         const { error } = await supabase.from('fields').delete().eq('id', id);
         if (error) {
             console.error("Error deleting field:", error);
-            alert("Failed to delete field");
+            return { success: false, message: "Failed to delete field" };
         } else {
             setFields(prev => prev.filter(f => f.id !== id));
+            return { success: true };
         }
     };
 
@@ -248,9 +254,10 @@ export const DataProvider = ({ children }) => {
         const { data, error } = await supabase.from('categories').insert([{ name }]).select();
         if (error) {
             console.error("Error adding category:", error);
-            alert("Failed to add category");
+            return { success: false, message: "Failed to add category" };
         } else if (data) {
             setCategories(prev => [...prev, data[0]]);
+            return { success: true };
         }
     };
 
@@ -258,25 +265,26 @@ export const DataProvider = ({ children }) => {
         const { error } = await supabase.from('categories').update({ name }).eq('id', id);
         if (error) {
             console.error("Error updating category:", error);
-            alert("Failed to update category");
+            return { success: false, message: "Failed to update category" };
         } else {
             setCategories(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+            return { success: true };
         }
     };
 
     const deleteCategory = async (id) => {
         // Check if fields exist locally first to save an API call
         if (fields.some(f => f.categoryId === id)) {
-            alert("Cannot delete category with fields. Move fields first.");
-            return;
+            return { success: false, message: "Cannot delete category with fields. Move fields first." };
         }
 
         const { error } = await supabase.from('categories').delete().eq('id', id);
         if (error) {
             console.error("Error deleting category:", error);
-            alert("Failed to delete category");
+            return { success: false, message: "Failed to delete category" };
         } else {
             setCategories(prev => prev.filter(c => c.id !== id));
+            return { success: true };
         }
     };
 
@@ -292,12 +300,13 @@ export const DataProvider = ({ children }) => {
 
         if (error) {
             console.error("Error submitting feedback:", error);
-            alert("Failed to submit feedback");
+            return { success: false, message: "Failed to submit feedback" };
         } else {
             // Refetch or add optimistically. Since ID is generated by DB, refetching or ignoring local update is easiest.
             // We'll just refetch feedback for admin view.
             const { data } = await supabase.from('feedback').select('*');
             if (data) setFeedback(data);
+            return { success: true };
         }
     };
 
@@ -358,9 +367,10 @@ export const DataProvider = ({ children }) => {
         const { error } = await supabase.from('app_config').upsert({ key, value });
         if (error) {
             console.error("Error updating config:", error);
-            alert("Failed to update config");
+            return { success: false, message: "Failed to update config" };
         } else {
             setAppConfig(prev => ({ ...prev, [key]: value }));
+            return { success: true };
         }
     };
 
