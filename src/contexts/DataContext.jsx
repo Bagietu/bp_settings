@@ -8,17 +8,21 @@ export const DataProvider = ({ children }) => {
     const [fields, setFields] = useState([]);
     const [categories, setCategories] = useState([]);
     const [feedback, setFeedback] = useState([]);
+    const [votes, setVotes] = useState([]);
+    const [appConfig, setAppConfig] = useState({ vote_period_days: '7' });
     const [loading, setLoading] = useState(true);
 
     // Fetch Initial Data
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [settingsRes, fieldsRes, catsRes, feedbackRes] = await Promise.all([
+            const [settingsRes, fieldsRes, catsRes, feedbackRes, votesRes, configRes] = await Promise.all([
                 supabase.from('settings').select('*'),
                 supabase.from('fields').select('*'),
                 supabase.from('categories').select('*'),
-                supabase.from('feedback').select('*')
+                supabase.from('feedback').select('*'),
+                supabase.from('votes').select('*'),
+                supabase.from('app_config').select('*')
             ]);
 
             if (settingsRes.data) {
@@ -42,6 +46,11 @@ export const DataProvider = ({ children }) => {
             }
             if (catsRes.data) setCategories(catsRes.data);
             if (feedbackRes.data) setFeedback(feedbackRes.data);
+            if (votesRes.data) setVotes(votesRes.data);
+            if (configRes.data) {
+                const configObj = configRes.data.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {});
+                setAppConfig(prev => ({ ...prev, ...configObj }));
+            }
         } catch (error) {
             console.error("Error fetching data:", error);
         } finally {
@@ -56,8 +65,9 @@ export const DataProvider = ({ children }) => {
         const isAdmin = sessionStorage.getItem('isAdmin');
         const role = sessionStorage.getItem('userRole');
         const email = sessionStorage.getItem('userEmail');
+        const id = sessionStorage.getItem('userId');
         if (isAdmin) {
-            setUser({ role, email });
+            setUser({ role, email, id });
         }
     }, []);
 
@@ -66,6 +76,7 @@ export const DataProvider = ({ children }) => {
         sessionStorage.setItem('isAdmin', 'true');
         sessionStorage.setItem('userRole', userData.role);
         sessionStorage.setItem('userEmail', userData.email);
+        sessionStorage.setItem('userId', userData.id);
         setUser(userData);
     };
 
@@ -74,6 +85,7 @@ export const DataProvider = ({ children }) => {
         sessionStorage.removeItem('isAdmin');
         sessionStorage.removeItem('userRole');
         sessionStorage.removeItem('userEmail');
+        sessionStorage.removeItem('userId');
         localStorage.removeItem('sessionExpiry');
         setUser(null);
         window.location.href = '/admin'; // Redirect to login page
@@ -307,6 +319,51 @@ export const DataProvider = ({ children }) => {
         }
     };
 
+    // --- Votes Management ---
+    const addVote = async (settingId) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { success: false, message: "Must be logged in to vote." };
+
+        // Check local limit first (optimistic)
+        const votePeriodDays = parseInt(appConfig.vote_period_days || '7', 10);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - votePeriodDays);
+
+        const existingVote = votes.find(v =>
+            v.setting_id === settingId &&
+            v.user_id === user.id &&
+            new Date(v.created_at) > cutoff
+        );
+
+        if (existingVote) {
+            return { success: false, message: `You have already marked this as working in the last ${votePeriodDays} days.` };
+        }
+
+        const { data, error } = await supabase.from('votes').insert([{
+            user_id: user.id,
+            setting_id: settingId
+        }]).select();
+
+        if (error) {
+            console.error("Error adding vote:", error);
+            return { success: false, message: `Failed to record vote: ${error.message}` };
+        } else {
+            setVotes(prev => [...prev, data[0]]);
+            return { success: true, message: "Marked as working!" };
+        }
+    };
+
+    // --- App Config Management ---
+    const updateAppConfig = async (key, value) => {
+        const { error } = await supabase.from('app_config').upsert({ key, value });
+        if (error) {
+            console.error("Error updating config:", error);
+            alert("Failed to update config");
+        } else {
+            setAppConfig(prev => ({ ...prev, [key]: value }));
+        }
+    };
+
     return (
         <DataContext.Provider value={{
             settings, addSetting, updateSetting, deleteSetting,
@@ -314,7 +371,9 @@ export const DataProvider = ({ children }) => {
             categories, addCategory, updateCategory, deleteCategory,
             feedback, addFeedback, resolveFeedback, deleteFeedback,
             loading,
-            user, login, logout
+            user, login, logout,
+            votes, addVote,
+            appConfig, updateAppConfig
         }}>
             {children}
         </DataContext.Provider>

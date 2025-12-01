@@ -16,7 +16,8 @@ export const AdminDashboard = () => {
         fields, addField, updateField, removeField,
         categories, addCategory, updateCategory, deleteCategory,
         feedback, resolveFeedback, deleteFeedback,
-        logout
+        logout,
+        votes, appConfig, updateAppConfig
     } = useData();
 
     const [activeTab, setActiveTab] = useState('settings');
@@ -29,6 +30,9 @@ export const AdminDashboard = () => {
     const [users, setUsers] = useState([]);
     const [history, setHistory] = useState([]);
     const [viewingHistoryItem, setViewingHistoryItem] = useState(null);
+
+    // Config State
+    const [configForm, setConfigForm] = useState({ vote_period_days: '7' });
 
     useEffect(() => {
         const isAdmin = sessionStorage.getItem('isAdmin');
@@ -45,7 +49,10 @@ export const AdminDashboard = () => {
                 }
             }
         }
-    }, [navigate, activeTab]); // Added activeTab dependency
+        if (appConfig) {
+            setConfigForm(appConfig);
+        }
+    }, [navigate, activeTab, appConfig]);
 
     const fetchUsers = async () => {
         const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -78,6 +85,12 @@ export const AdminDashboard = () => {
 
     const handleLogout = () => {
         logout();
+    };
+
+    const handleSaveConfig = (e) => {
+        e.preventDefault();
+        updateAppConfig('vote_period_days', configForm.vote_period_days);
+        alert("Configuration saved!");
     };
 
     // Settings Form State
@@ -129,6 +142,8 @@ export const AdminDashboard = () => {
     if (userRole === 'admin') {
         tabs.push({ id: 'users', label: 'Users', icon: Users });
         tabs.push({ id: 'history', label: 'History', icon: Clock });
+        tabs.push({ id: 'votes', label: 'Votes', icon: Check });
+        tabs.push({ id: 'config', label: 'Config', icon: Shield });
     }
 
     return (
@@ -462,6 +477,80 @@ export const AdminDashboard = () => {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+
+            {/* VOTES TAB (Admin Only) */}
+            {activeTab === 'votes' && userRole === 'admin' && (
+                <div className="space-y-4">
+                    <div className="rounded-md border border-slate-200 bg-white overflow-hidden overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-700 font-medium">
+                                <tr>
+                                    <th className="p-4">Date</th>
+                                    <th className="p-4">User ID</th>
+                                    <th className="p-4">Setting ID</th>
+                                    <th className="p-4">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {votes.map((vote) => (
+                                    <tr key={vote.id} className="hover:bg-slate-50">
+                                        <td className="p-4 text-slate-500 whitespace-nowrap">
+                                            {new Date(vote.created_at).toLocaleString()}
+                                        </td>
+                                        <td className="p-4 font-medium">
+                                            {(() => {
+                                                const user = users.find(u => u.id === vote.user_id);
+                                                return user ? (
+                                                    <div>
+                                                        <p className="font-semibold">{user.first_name} {user.last_name}</p>
+                                                        <p className="text-xs text-slate-500">{user.email}</p>
+                                                    </div>
+                                                ) : vote.user_id;
+                                            })()}
+                                        </td>
+                                        <td className="p-4">
+                                            {(() => {
+                                                const setting = settings.find(s => s.id === vote.setting_id);
+                                                return setting ? (
+                                                    <span>Leg {setting.legNumber} - {setting.sku}</span>
+                                                ) : vote.setting_id;
+                                            })()}
+                                        </td>
+                                        <td className="p-4 text-green-600">Marked as Working</td>
+                                    </tr>
+                                ))}
+                                {votes.length === 0 && (
+                                    <tr>
+                                        <td colSpan="4" className="p-8 text-center text-slate-500">No votes recorded yet.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* CONFIG TAB (Admin Only) */}
+            {activeTab === 'config' && userRole === 'admin' && (
+                <div className="max-w-xl space-y-6">
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h3 className="text-lg font-semibold text-slate-900 mb-4">Application Configuration</h3>
+                        <form onSubmit={handleSaveConfig} className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-slate-700">Voting Period (Days)</label>
+                                <p className="text-xs text-slate-500">How often can a user mark the same setting as working?</p>
+                                <Input
+                                    type="number"
+                                    min="1"
+                                    value={configForm.vote_period_days || ''}
+                                    onChange={e => setConfigForm({ ...configForm, vote_period_days: e.target.value })}
+                                />
+                            </div>
+                            <Button type="submit">Save Configuration</Button>
+                        </form>
                     </div>
                 </div>
             )}

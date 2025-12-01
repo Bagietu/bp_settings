@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Search, ArrowRight, Eye, ChevronRight, Package, FileText, CheckCircle } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Search, ArrowRight, Eye, ChevronRight, Package, FileText, CheckCircle, ThumbsUp, ArrowUpDown } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -9,96 +9,77 @@ import { Tabs } from '../components/ui/Tabs';
 import { Link } from 'react-router-dom';
 
 export const Home = () => {
-    const { settings, fields, categories } = useData();
+    const { settings, fields, categories, addVote, votes, user } = useData();
 
     // Search State
     const [legSearch, setLegSearch] = useState('');
     const [skuSearch, setSkuSearch] = useState('');
-
-    // UI State
-    const [searchResult, setSearchResult] = useState(null); // 'suggestions', 'found', 'not_found', null
-    const [foundSetting, setFoundSetting] = useState(null);
-    const [liveSuggestions, setLiveSuggestions] = useState([]);
-    const [availableCaseSizes, setAvailableCaseSizes] = useState([]);
     const [selectedCaseSize, setSelectedCaseSize] = useState(null);
-    const [availableSkus, setAvailableSkus] = useState([]);
+    const [sortOption, setSortOption] = useState('sku'); // 'sku', 'last_change', 'last_worked'
 
     // Modal State
     const [selectedSettingDetails, setSelectedSettingDetails] = useState(null);
     const [activeCategory, setActiveCategory] = useState(categories[0]?.id || '');
 
-    const handleSkuChange = (e) => {
-        const value = e.target.value;
-        setSkuSearch(value);
+    // Success Modal State
+    const [successModal, setSuccessModal] = useState({ isOpen: false, message: '' });
 
-        if (!legSearch) return;
+    // Derived Data
+    const availableCaseSizes = useMemo(() => {
+        if (!legSearch) return [];
+        const legSettings = settings.filter(s => s.legNumber === legSearch);
+        return [...new Set(legSettings.map(s => s.caseSize))].filter(Boolean).sort();
+    }, [legSearch, settings]);
 
-        // Filter for partial matches on the selected leg
-        const matches = settings.filter(s =>
-            s.legNumber === legSearch &&
-            s.sku.toLowerCase().includes(value.toLowerCase())
-        );
+    const filteredSkus = useMemo(() => {
+        if (!legSearch) return [];
 
-        if (matches.length > 0) {
-            setLiveSuggestions(matches);
-            setSearchResult('suggestions');
+        // Base filter: Leg Number
+        let skus = settings.filter(s => s.legNumber === legSearch);
+
+        // Secondary Filter: SKU Search OR Case Size
+        if (skuSearch) {
+            // If user is typing, filter by SKU (ignore case size)
+            skus = skus.filter(s => s.sku.toLowerCase().includes(skuSearch.toLowerCase()));
+        } else if (selectedCaseSize) {
+            // If no typing, filter by selected Case Size
+            skus = skus.filter(s => s.caseSize === selectedCaseSize);
         } else {
-            setLiveSuggestions([]);
-            // Fallback: Show available case sizes for this leg
-            const legSettings = settings.filter(s => s.legNumber === legSearch);
-            const uniqueCaseSizes = [...new Set(legSettings.map(s => s.caseSize))].filter(Boolean);
-            setAvailableCaseSizes(uniqueCaseSizes);
-            setSearchResult('not_found');
+            // If neither, return empty (show case sizes instead)
+            return [];
         }
-    };
 
-    // Handle Leg Change - Show all SKUs immediately
+        // Calculate Last Worked for sorting
+        skus = skus.map(s => {
+            const settingVotes = votes.filter(v => v.setting_id === s.id);
+            const lastWorked = settingVotes.length > 0
+                ? new Date(Math.max(...settingVotes.map(v => new Date(v.created_at))))
+                : null;
+            return { ...s, lastWorked };
+        });
+
+        // Sorting
+        return skus.sort((a, b) => {
+            if (sortOption === 'sku') return a.sku.localeCompare(b.sku);
+            if (sortOption === 'last_change') return new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0);
+            if (sortOption === 'last_worked') return (b.lastWorked || 0) - (a.lastWorked || 0);
+            return 0;
+        });
+    }, [legSearch, selectedCaseSize, skuSearch, settings, votes, sortOption]);
+
     const handleLegChange = (e) => {
-        const leg = e.target.value;
-        setLegSearch(leg);
+        setLegSearch(e.target.value);
+        setSelectedCaseSize(null);
         setSkuSearch('');
-        setFoundSetting(null);
+    };
 
-        if (leg) {
-            // Get all SKUs for this leg immediately
-            const legSettings = settings.filter(s => s.legNumber === leg);
-            setLiveSuggestions(legSettings);
-            setSearchResult('suggestions');
+    const handleVote = async (settingId) => {
+        const result = await addVote(settingId);
+        if (result.success) {
+            setSuccessModal({ isOpen: true, message: result.message });
         } else {
-            setLiveSuggestions([]);
-            setSearchResult(null);
+            alert(result.message);
         }
-    };
-
-    const handleCaseSizeClick = (caseSize) => {
-        setSelectedCaseSize(caseSize);
-        // Find SKUs for this Leg + Case Size
-        const skus = settings
-            .filter(s => s.legNumber === legSearch && s.caseSize === caseSize)
-            .map(s => s.sku);
-        setAvailableSkus(skus);
-    };
-
-    const handleSuggestionClick = (setting) => {
-        setFoundSetting(setting);
-        setSearchResult('found');
-        setSkuSearch(setting.sku); // Auto-complete the input
-    };
-
-    const handleSkuClick = (sku) => {
-        const match = settings.find(s =>
-            s.legNumber === legSearch &&
-            s.sku === sku
-        );
-        if (match) {
-            setFoundSetting(match);
-            setSearchResult('found');
-        }
-    };
-
-    const handleViewDetails = (setting) => {
-        setSelectedSettingDetails(setting);
-        setActiveCategory(categories[0]?.id);
     };
 
     return (
@@ -108,214 +89,199 @@ export const Home = () => {
                     Blueprint Settings
                 </h1>
                 <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-                    Select a Leg and start typing a SKU to search.
+                    Select a Leg, then Case Size OR start typing to find your SKU.
                 </p>
             </div>
 
-            {/* Search Bar */}
-            <div className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <div className="md:col-span-1">
-                        <label className="text-sm font-medium text-slate-700 mb-1 block">Leg Number</label>
-                        <select
-                            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                            value={legSearch}
-                            onChange={handleLegChange}
-                        >
-                            <option value="">Select</option>
-                            <optgroup label="CP 26">
-                                <option value="4">Leg 4</option>
-                                <option value="5">Leg 5</option>
-                                <option value="6">Leg 6</option>
-                            </optgroup>
-                            <optgroup label="CP 27">
-                                <option value="7">Leg 7</option>
-                                <option value="8">Leg 8</option>
-                                <option value="9">Leg 9</option>
-                            </optgroup>
-                            <optgroup label="CP 30">
-                                <option value="18">Leg 18</option>
-                                <option value="17">Leg 17</option>
-                                <option value="16">Leg 16</option>
-                            </optgroup>
-                            <optgroup label="CP 31">
-                                <option value="15">Leg 15</option>
-                                <option value="14">Leg 14</option>
-                                <option value="13">Leg 13</option>
-                            </optgroup>
-                            <optgroup label="CP 23">
-                                <option value="12">Leg 12</option>
-                                <option value="11">Leg 11</option>
-                                <option value="10">Leg 10</option>
-                            </optgroup>
-                            <optgroup label="CP 22">
-                                <option value="3">Leg 3</option>
-                                <option value="2">Leg 2</option>
-                                <option value="1">Leg 1</option>
-                            </optgroup>
-                        </select>
-                    </div>
-                    <div className="md:col-span-2">
-                        <label className="text-sm font-medium text-slate-700 mb-1 block">SKU</label>
-                        <div className="relative">
-                            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                            <Input
-                                placeholder={legSearch ? "Start typing SKU..." : "Select Leg first"}
-                                className="pl-10"
-                                value={skuSearch}
-                                onChange={handleSkuChange}
-                                disabled={!legSearch}
-                            />
-                        </div>
-                    </div>
-                </div>
+            {/* Leg Selection */}
+            <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <label className="text-sm font-medium text-slate-700 mb-1 block">Select Leg Number</label>
+                <select
+                    className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    value={legSearch}
+                    onChange={handleLegChange}
+                >
+                    <option value="">Select Leg</option>
+                    <optgroup label="CP 26">
+                        <option value="4">Leg 4</option>
+                        <option value="5">Leg 5</option>
+                        <option value="6">Leg 6</option>
+                    </optgroup>
+                    <optgroup label="CP 27">
+                        <option value="7">Leg 7</option>
+                        <option value="8">Leg 8</option>
+                        <option value="9">Leg 9</option>
+                    </optgroup>
+                    <optgroup label="CP 30">
+                        <option value="18">Leg 18</option>
+                        <option value="17">Leg 17</option>
+                        <option value="16">Leg 16</option>
+                    </optgroup>
+                    <optgroup label="CP 31">
+                        <option value="15">Leg 15</option>
+                        <option value="14">Leg 14</option>
+                        <option value="13">Leg 13</option>
+                    </optgroup>
+                    <optgroup label="CP 23">
+                        <option value="12">Leg 12</option>
+                        <option value="11">Leg 11</option>
+                        <option value="10">Leg 10</option>
+                    </optgroup>
+                    <optgroup label="CP 22">
+                        <option value="3">Leg 3</option>
+                        <option value="2">Leg 2</option>
+                        <option value="1">Leg 1</option>
+                    </optgroup>
+                </select>
             </div>
 
-            {/* Results Area */}
-            <div className="max-w-4xl mx-auto">
+            {/* Main Content Area */}
+            {legSearch && (
+                <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-                {/* Case 1: Live Suggestions */}
-                {searchResult === 'suggestions' && (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <h3 className="text-lg font-semibold text-slate-900">
-                            {skuSearch ? `Found ${liveSuggestions.length} matching SKUs` : `All SKUs for Leg ${legSearch}`}
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {liveSuggestions.map(setting => (
-                                <Card
-                                    key={setting.id}
-                                    className="hover:shadow-md transition-all cursor-pointer border-slate-200 hover:border-blue-400 group"
-                                    onClick={() => handleSuggestionClick(setting)}
+                    {/* Search & Filter Bar */}
+                    <div className="flex flex-col items-center gap-4 bg-slate-50 p-6 rounded-lg border border-slate-200">
+                        <div className="relative w-full max-w-md">
+                            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                            <Input
+                                placeholder="Type SKU to search..."
+                                className="pl-10 bg-white w-full"
+                                value={skuSearch}
+                                onChange={(e) => setSkuSearch(e.target.value)}
+                            />
+                        </div>
+
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                                setLegSearch('');
+                                setSkuSearch('');
+                                setSelectedCaseSize(null);
+                            }}
+                            className="text-slate-500 hover:text-slate-700"
+                        >
+                            Reset Search
+                        </Button>
+
+                        {/* Only show sorting if we are displaying SKUs */}
+                        {(skuSearch || selectedCaseSize) && filteredSkus.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <ArrowUpDown className="h-4 w-4 text-slate-500" />
+                                <select
+                                    className="flex h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                    value={sortOption}
+                                    onChange={(e) => setSortOption(e.target.value)}
                                 >
-                                    <CardContent className="p-4 flex justify-between items-center">
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <FileText className="h-4 w-4 text-slate-400 group-hover:text-blue-500" />
-                                                <span className="font-bold text-slate-700 group-hover:text-blue-600">{setting.sku}</span>
-                                            </div>
-                                            <p className="text-sm text-slate-500 mt-1">Case: {setting.caseSize}</p>
-                                        </div>
-                                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500" />
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Case 2: Found Exact Match (Selected) */}
-                {searchResult === 'found' && foundSetting && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <Card className="hover:shadow-md transition-shadow border-green-200 bg-green-50/30">
-                            <CardHeader>
-                                <CardTitle className="flex justify-between items-center">
-                                    <div className="flex items-center gap-2">
-                                        <CheckCircle className="h-5 w-5 text-green-600" />
-                                        <span>SKU: {foundSetting.sku}</span>
-                                    </div>
-                                    <span className="text-sm font-normal text-slate-500 bg-white px-2 py-1 rounded border border-slate-200">
-                                        Leg {foundSetting.legNumber}
-                                    </span>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Case Size</span>
-                                    <span className="font-medium">{foundSetting.caseSize}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Last Updated</span>
-                                    <span className="font-medium">{foundSetting.lastUpdated ? new Date(foundSetting.lastUpdated).toLocaleDateString() : '-'}</span>
-                                </div>
-                            </CardContent>
-                            <CardFooter className="gap-2">
-                                <Button variant="secondary" className="flex-1 gap-2" onClick={() => handleViewDetails(foundSetting)}>
-                                    <Eye className="h-4 w-4" /> View Details
-                                </Button>
-                                <Link to={`/feedback?sku=${foundSetting.sku}&leg=${foundSetting.legNumber}`} className="flex-1">
-                                    <Button variant="ghost" className="w-full gap-2">
-                                        Request Change
-                                    </Button>
-                                </Link>
-                            </CardFooter>
-                        </Card>
-
-                        <div className="mt-4 text-center">
-                            <Button variant="ghost" onClick={() => {
-                                setSearchResult('suggestions');
-                                setFoundSetting(null);
-                            }} className="text-slate-500">
-                                Back to results
-                            </Button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Case 3: Not Found - Show Fallback Flow */}
-                {searchResult === 'not_found' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 flex items-start gap-3">
-                            <div className="mt-1"><Package className="h-5 w-5" /></div>
-                            <div>
-                                <p className="font-medium">No settings found for SKU "{skuSearch}" on Leg {legSearch}.</p>
-                                <p className="text-sm mt-1 opacity-90">Please select a Case Size below to see available SKUs for this leg.</p>
-                            </div>
-                        </div>
-
-                        {/* Step 1: Select Case Size */}
-                        {!selectedCaseSize && (
-                            <div className="space-y-3">
-                                <h3 className="text-lg font-semibold text-slate-900">Available Case Sizes for Leg {legSearch}</h3>
-                                {availableCaseSizes.length > 0 ? (
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                        {availableCaseSizes.map(size => (
-                                            <button
-                                                key={size}
-                                                onClick={() => handleCaseSizeClick(size)}
-                                                className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-500 hover:shadow-md transition-all text-left group"
-                                            >
-                                                <span className="font-medium text-slate-700 group-hover:text-blue-600">{size}</span>
-                                                <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500" />
-                                            </button>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-slate-500 italic">No case sizes recorded for this leg yet.</p>
-                                )}
+                                    <option value="sku">Sort by SKU</option>
+                                    <option value="last_change">Sort by Last Change</option>
+                                    <option value="last_worked">Sort by Last Worked</option>
+                                </select>
                             </div>
                         )}
+                    </div>
 
-                        {/* Step 2: Select SKU */}
-                        {selectedCaseSize && (
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-sm text-slate-500">
-                                    <button onClick={() => setSelectedCaseSize(null)} className="hover:underline">Case Sizes</button>
-                                    <ChevronRight className="h-3 w-3" />
-                                    <span className="font-medium text-slate-900">{selectedCaseSize}</span>
-                                </div>
+                    {/* Logic Branching */}
 
-                                <h3 className="text-lg font-semibold text-slate-900">Available SKUs</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                    {availableSkus.map(sku => (
+                    {/* Case Sizes - Show if:
+                        1. No Case Size Selected AND
+                        2. (No Search Active OR No Search Results)
+                    */}
+                    {!selectedCaseSize && (!skuSearch || filteredSkus.length === 0) && (
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold text-slate-900 text-center">
+                                {skuSearch ? "No matching SKUs. Select Case Size:" : "Select Case Size"}
+                            </h3>
+                            {availableCaseSizes.length > 0 ? (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    {availableCaseSizes.map(size => (
                                         <button
-                                            key={sku}
-                                            onClick={() => handleSkuClick(sku)}
-                                            className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-500 hover:shadow-md transition-all text-left group"
+                                            key={size}
+                                            onClick={() => {
+                                                setSelectedCaseSize(size);
+                                                setSkuSearch(''); // Clear SKU search on selection
+                                            }}
+                                            className="flex flex-col items-center justify-center p-6 bg-white border border-slate-200 rounded-xl hover:border-blue-500 hover:shadow-md transition-all group"
                                         >
-                                            <div className="flex items-center gap-2">
-                                                <FileText className="h-4 w-4 text-slate-400 group-hover:text-blue-500" />
-                                                <span className="font-medium text-slate-700 group-hover:text-blue-600">{sku}</span>
-                                            </div>
-                                            <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500" />
+                                            <Package className="h-8 w-8 text-slate-400 group-hover:text-blue-500 mb-2" />
+                                            <span className="font-medium text-lg text-slate-700 group-hover:text-blue-600">{size}</span>
                                         </button>
                                     ))}
                                 </div>
-                            </div>
-                        )}
-                    </div>
-                )}
+                            ) : (
+                                <p className="text-center text-slate-500 italic">No settings found for this leg.</p>
+                            )}
+                        </div>
+                    )}
 
-            </div>
+                    {/* SKUs - Show if:
+                        1. Search Active OR Case Size Selected
+                    */}
+                    {(skuSearch || selectedCaseSize) && (
+                        <div className="space-y-4">
+                            {/* Breadcrumbs / Context */}
+                            <div className="flex items-center gap-2 text-sm text-slate-500 mb-4 justify-center">
+                                <span className="font-medium text-slate-900">Leg {legSearch}</span>
+                                {selectedCaseSize && !skuSearch && (
+                                    <>
+                                        <ChevronRight className="h-3 w-3" />
+                                        <button onClick={() => setSelectedCaseSize(null)} className="hover:underline">Case Sizes</button>
+                                        <ChevronRight className="h-3 w-3" />
+                                        <span className="font-medium text-slate-900">{selectedCaseSize}</span>
+                                    </>
+                                )}
+                                {skuSearch && (
+                                    <>
+                                        <ChevronRight className="h-3 w-3" />
+                                        <span className="font-medium text-slate-900">Searching "{skuSearch}"</span>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* SKU Grid */}
+                            {filteredSkus.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {filteredSkus.map(setting => (
+                                        <Card
+                                            key={setting.id}
+                                            className="hover:shadow-md transition-all cursor-pointer border-slate-200 hover:border-blue-400 group"
+                                            onClick={() => {
+                                                setSelectedSettingDetails(setting);
+                                                setActiveCategory(categories[0]?.id);
+                                            }}
+                                        >
+                                            <CardContent className="p-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="bg-blue-50 p-2 rounded-lg">
+                                                            <FileText className="h-5 w-5 text-blue-500" />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="font-bold text-slate-900 text-lg">{setting.sku}</h4>
+                                                            <p className="text-xs text-slate-500">Case: {setting.caseSize}</p>
+                                                            <p className="text-xs text-slate-500">Last Change: {setting.lastUpdated ? new Date(setting.lastUpdated).toLocaleDateString() : '-'}</p>
+                                                        </div>
+                                                    </div>
+                                                    {setting.lastWorked && (
+                                                        <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
+                                                            <CheckCircle className="h-3 w-3" />
+                                                            Worked: {setting.lastWorked.toLocaleDateString()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-8">
+                                    <p className="text-slate-500 font-medium">No SKUs found matching "{skuSearch}".</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Details Modal */}
             <Modal
@@ -336,9 +302,25 @@ export const Home = () => {
                                 <p className="font-semibold text-lg">{selectedSettingDetails.caseSize}</p>
                             </div>
                             <div>
-                                <span className="text-xs text-slate-500 uppercase tracking-wider">Last Updated</span>
-                                <p className="font-semibold text-lg">{selectedSettingDetails.lastUpdated ? new Date(selectedSettingDetails.lastUpdated).toLocaleDateString() : '-'}</p>
+                                <span className="text-xs text-slate-500 uppercase tracking-wider">Last Worked</span>
+                                <p className="font-semibold text-lg text-green-600">
+                                    {selectedSettingDetails.lastWorked ? selectedSettingDetails.lastWorked.toLocaleDateString() : 'Never'}
+                                </p>
                             </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <Button
+                                onClick={() => handleVote(selectedSettingDetails.id)}
+                                className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+                            >
+                                <ThumbsUp className="h-4 w-4" /> Mark as Working
+                            </Button>
+                            <Link to={`/feedback?sku=${selectedSettingDetails.sku}&leg=${selectedSettingDetails.legNumber}`} className="flex-1">
+                                <Button variant="outline" className="w-full gap-2">
+                                    Request Change
+                                </Button>
+                            </Link>
                         </div>
 
                         <div>
@@ -366,6 +348,29 @@ export const Home = () => {
                         </div>
                     </div>
                 )}
+            </Modal>
+
+            {/* Success Modal */}
+            <Modal
+                isOpen={successModal.isOpen}
+                onClose={() => setSuccessModal({ ...successModal, isOpen: false })}
+                title="Success"
+                className="max-w-sm"
+            >
+                <div className="text-center space-y-4 py-4">
+                    <div className="flex justify-center">
+                        <div className="bg-green-100 p-3 rounded-full">
+                            <CheckCircle className="h-8 w-8 text-green-600" />
+                        </div>
+                    </div>
+                    <p className="text-lg font-medium text-slate-900">{successModal.message}</p>
+                    <Button
+                        onClick={() => setSuccessModal({ ...successModal, isOpen: false })}
+                        className="w-full"
+                    >
+                        OK
+                    </Button>
+                </div>
             </Modal>
         </div>
     );

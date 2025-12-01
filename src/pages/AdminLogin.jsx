@@ -99,8 +99,13 @@ export const AdminLogin = () => {
                         localStorage.removeItem('sessionExpiry');
                     }
 
-                    login({ role: profile.role, email: normalizedEmail });
-                    navigate('/admin/dashboard');
+                    login({ role: profile.role, email: normalizedEmail, id: data.user.id });
+
+                    if (profile.role === 'user') {
+                        navigate('/');
+                    } else {
+                        navigate('/admin/dashboard');
+                    }
                 }
             }
         } catch (err) {
