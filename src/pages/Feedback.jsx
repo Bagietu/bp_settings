@@ -9,7 +9,7 @@ import { CheckCircle2 } from 'lucide-react';
 export const Feedback = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { addFeedback, fields, categories } = useData();
+    const { addFeedback, fields, categories, user } = useData();
     const initialSku = searchParams.get('sku') || '';
     const initialLeg = searchParams.get('leg') || '';
 
@@ -20,6 +20,16 @@ export const Feedback = () => {
         legNumber: initialLeg,
         message: ''
     });
+
+    // Pre-fill name if logged in and field is empty
+    React.useEffect(() => {
+        console.log("Feedback: User state:", user);
+        if (user && (user.firstName || user.lastName) && !formData.name) {
+            const fullName = `${user.firstName} ${user.lastName}`.trim();
+            console.log("Pre-filling name:", fullName);
+            setFormData(prev => ({ ...prev, name: fullName }));
+        }
+    }, [user, formData.name]);
 
     // State for New Product Request dynamic fields
     const [newProductData, setNewProductData] = useState({});

@@ -12,6 +12,17 @@ export const DataProvider = ({ children }) => {
     const [appConfig, setAppConfig] = useState({ vote_period_days: '7' });
     const [loading, setLoading] = useState(true);
 
+    // Search State (Global for Layout access)
+    const [legSearch, setLegSearch] = useState('');
+    const [skuSearch, setSkuSearch] = useState('');
+    const [selectedCaseSize, setSelectedCaseSize] = useState(null);
+
+    const resetSearch = () => {
+        setLegSearch('');
+        setSkuSearch('');
+        setSelectedCaseSize(null);
+    };
+
     // Fetch Initial Data
     const fetchData = async () => {
         setLoading(true);
@@ -66,8 +77,11 @@ export const DataProvider = ({ children }) => {
         const role = sessionStorage.getItem('userRole');
         const email = sessionStorage.getItem('userEmail');
         const id = sessionStorage.getItem('userId');
+        const status = sessionStorage.getItem('userStatus');
+        const firstName = sessionStorage.getItem('userFirstName');
+        const lastName = sessionStorage.getItem('userLastName');
         if (isAdmin) {
-            setUser({ role, email, id });
+            setUser({ role, email, id, status, firstName, lastName });
         }
     }, []);
 
@@ -77,37 +91,101 @@ export const DataProvider = ({ children }) => {
         sessionStorage.setItem('userRole', userData.role);
         sessionStorage.setItem('userEmail', userData.email);
         sessionStorage.setItem('userId', userData.id);
+        sessionStorage.setItem('userStatus', userData.status);
+        sessionStorage.setItem('userFirstName', userData.firstName || '');
+        sessionStorage.setItem('userLastName', userData.lastName || '');
         setUser(userData);
     };
 
     const logout = async () => {
-        await supabase.auth.signOut();
-        sessionStorage.removeItem('isAdmin');
-        sessionStorage.removeItem('userRole');
-        sessionStorage.removeItem('userEmail');
-        sessionStorage.removeItem('userId');
-        localStorage.removeItem('sessionExpiry');
-        setUser(null);
-        window.location.href = '/admin'; // Redirect to login page
+        try {
+            await supabase.auth.signOut();
+        } catch (error) {
+            console.error("Error signing out:", error);
+        } finally {
+            sessionStorage.removeItem('isAdmin');
+            sessionStorage.removeItem('userRole');
+            sessionStorage.removeItem('userEmail');
+            sessionStorage.removeItem('userId');
+            sessionStorage.removeItem('userStatus');
+            localStorage.removeItem('sessionExpiry');
+            setUser(null);
+            // Navigation is now handled by the caller (Layout.jsx)
+        }
     };
 
     useEffect(() => {
         fetchData();
 
-        // Check for session expiry (for "Remember Me: Unchecked" logic)
+        // Listen for Auth Changes (Syncs UI with Supabase Session)
+        const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log("Auth State Change:", event, session?.user?.email);
+
+            if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+                // Fetch profile to get role and name
+                console.log("Fetching profile for user:", session.user.id);
+                const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+
+                if (error) {
+                    console.error("Error fetching profile in listener:", error);
+                }
+
+                // Even if profile is missing, we MUST set the user state so the app knows we are logged in.
+                // Default to 'user' role and 'pending' status if profile is missing.
+                // Fallback to user_metadata for name if not in profile
+                const userData = {
+                    id: session.user.id,
+                    email: session.user.email,
+                    role: profile?.role || 'user',
+                    status: profile?.status || 'pending',
+                    firstName: profile?.first_name || session.user.user_metadata?.first_name || '',
+                    lastName: profile?.last_name || session.user.user_metadata?.last_name || ''
+                };
+
+                // STRICT BLOCKING: If user is pending, force logout immediately.
+                if (userData.status === 'pending') {
+                    console.log("User is pending. Forcing logout.");
+                    await supabase.auth.signOut();
+                    setUser(null);
+                    sessionStorage.clear();
+                    localStorage.removeItem('sessionExpiry');
+                    return; // Stop execution
+                }
+
+                console.log("Setting user in context:", userData);
+                setUser(userData);
+
+                // Keep Session Storage in sync
+                sessionStorage.setItem('isAdmin', 'true');
+                sessionStorage.setItem('userRole', userData.role);
+                sessionStorage.setItem('userEmail', userData.email);
+                sessionStorage.setItem('userId', userData.id);
+                sessionStorage.setItem('userStatus', userData.status);
+                sessionStorage.setItem('userFirstName', userData.firstName);
+                sessionStorage.setItem('userLastName', userData.lastName);
+            } else if (event === 'SIGNED_OUT') {
+                setUser(null);
+                sessionStorage.clear();
+                localStorage.removeItem('sessionExpiry');
+            }
+        });
+
+        // Check for session expiry (Local "Remember Me" logic)
         const checkSessionExpiry = async () => {
             const expiry = localStorage.getItem('sessionExpiry');
             if (expiry && Date.now() > parseInt(expiry, 10)) {
                 console.log("Session expired. Logging out.");
-                logout();
+                await logout();
             }
         };
 
-        // Check immediately and then every minute
         checkSessionExpiry();
         const interval = setInterval(checkSessionExpiry, 60000);
 
-        return () => clearInterval(interval);
+        return () => {
+            authListener.subscription.unsubscribe();
+            clearInterval(interval);
+        };
     }, []);
 
     // --- History Logging ---
@@ -383,7 +461,11 @@ export const DataProvider = ({ children }) => {
             loading,
             user, login, logout,
             votes, addVote,
-            appConfig, updateAppConfig
+            appConfig, updateAppConfig,
+            legSearch, setLegSearch,
+            skuSearch, setSkuSearch,
+            selectedCaseSize, setSelectedCaseSize,
+            resetSearch
         }}>
             {children}
         </DataContext.Provider>

@@ -6,15 +6,19 @@ import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export const Home = () => {
-    const { settings, fields, categories, addVote, votes, user } = useData();
+    const {
+        settings, fields, categories, addVote, votes, user,
+        legSearch, setLegSearch,
+        skuSearch, setSkuSearch,
+        selectedCaseSize, setSelectedCaseSize,
+        resetSearch
+    } = useData();
+    const navigate = useNavigate();
 
-    // Search State
-    const [legSearch, setLegSearch] = useState('');
-    const [skuSearch, setSkuSearch] = useState('');
-    const [selectedCaseSize, setSelectedCaseSize] = useState(null);
+    // Search State (Moved to Context)
     const [sortOption, setSortOption] = useState('sku'); // 'sku', 'last_change', 'last_worked'
 
     // Modal State
@@ -88,8 +92,9 @@ export const Home = () => {
     };
 
     return (
-        <div className="space-y-8">
-            <div className="text-center space-y-4 py-8">
+        <div className="space-y-8 relative">
+
+            <div className="text-center space-y-4 py-8 mt-8">
                 <h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
                     Blueprint Settings
                 </h1>
@@ -159,11 +164,7 @@ export const Home = () => {
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                                setLegSearch('');
-                                setSkuSearch('');
-                                setSelectedCaseSize(null);
-                            }}
+                            onClick={resetSearch}
                             className="text-slate-500 hover:text-slate-700"
                         >
                             Reset Search
@@ -365,7 +366,7 @@ export const Home = () => {
                 <div className="text-center space-y-4 py-4">
                     <div className="flex justify-center">
                         <div className={`p-3 rounded-full ${statusModal.type === 'success' ? 'bg-green-100' :
-                                statusModal.type === 'error' ? 'bg-red-100' : 'bg-amber-100'
+                            statusModal.type === 'error' ? 'bg-red-100' : 'bg-amber-100'
                             }`}>
                             {statusModal.type === 'success' && <CheckCircle className="h-8 w-8 text-green-600" />}
                             {statusModal.type === 'error' && <AlertCircle className="h-8 w-8 text-red-600" />}
@@ -377,8 +378,8 @@ export const Home = () => {
                     <Button
                         onClick={() => setStatusModal({ ...statusModal, isOpen: false })}
                         className={`w-full ${statusModal.type === 'success' ? 'bg-green-600 hover:bg-green-700' :
-                                statusModal.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
-                                    'bg-slate-900 hover:bg-slate-800'
+                            statusModal.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
+                                'bg-slate-900 hover:bg-slate-800'
                             }`}
                     >
                         OK

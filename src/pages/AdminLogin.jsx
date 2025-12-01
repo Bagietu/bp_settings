@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import { useData } from '../contexts/DataContext';
 
 export const AdminLogin = () => {
-    const { login } = useData();
+    const { user, login } = useData(); // Get user from context
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [firstName, setFirstName] = useState('');
@@ -18,15 +18,32 @@ export const AdminLogin = () => {
     const [rememberMe, setRememberMe] = useState(true);
     const navigate = useNavigate();
 
+    // Auto-redirect if already logged in
+    React.useEffect(() => {
+        if (user) {
+            console.log("User already logged in, redirecting...", user);
+            // If pending, they shouldn't be here (DataContext will force logout), but just in case:
+            if (user.status === 'pending') {
+                // Do nothing, let DataContext handle the logout
+            } else if (user.role === 'user') {
+                navigate('/');
+            } else {
+                navigate('/admin/dashboard');
+            }
+        }
+    }, [user, navigate]);
+
     const handleAuth = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
+        console.log("Starting auth process...");
 
         const normalizedEmail = email.toLowerCase();
 
         try {
             if (isRegistering) {
+                console.log("Attempting registration for:", normalizedEmail);
                 // Registration Flow
                 const { data: authData, error: authError } = await supabase.auth.signUp({
                     email: normalizedEmail,
@@ -39,24 +56,36 @@ export const AdminLogin = () => {
                     }
                 });
 
-                if (authError) throw authError;
+                if (authError) {
+                    console.error("Registration error:", authError);
+                    throw authError;
+                }
+                console.log("Registration successful:", authData);
 
                 if (authData.user) {
                     // Profile is created automatically by database trigger
-                    setError("Registration successful! Please wait for an admin to approve your account.");
+                    // STRICT BLOCKING: Force logout so they aren't auto-logged in
+                    await supabase.auth.signOut();
+                    setError("Registration successful! Account created but requires Admin approval.");
                     setIsRegistering(false);
                 }
             } else {
+                console.log("Attempting login for:", normalizedEmail);
                 // Login Flow
                 const { data, error } = await supabase.auth.signInWithPassword({
                     email: normalizedEmail,
                     password,
                 });
 
-                if (error) throw error;
+                if (error) {
+                    console.error("Login error:", error);
+                    throw error;
+                }
+                console.log("Login successful, user data:", data);
 
                 if (data.user) {
                     // Check Profile
+                    console.log("Fetching profile for:", data.user.id);
                     const { data: profile, error: profileError } = await supabase
                         .from('profiles')
                         .select('*')
@@ -64,24 +93,31 @@ export const AdminLogin = () => {
                         .single();
 
                     if (profileError && profileError.code !== 'PGRST116') {
+                        console.error("Profile fetch error:", profileError);
                         throw profileError;
                     }
 
                     if (!profile) {
+                        console.log("No profile found, creating fallback...");
                         // Fallback for existing users without profile
                         await supabase.from('profiles').insert([{
                             id: data.user.id,
                             email: normalizedEmail,
-                            role: 'moderator',
+                            role: 'user',
                             status: 'pending'
                         }]);
                         setError("Account created but requires approval.");
                         return;
                     }
 
+                    console.log("Profile found:", profile);
+
+                    // If pending, we still log them in so Layout.jsx can show the "Pending Approval" screen
+                    // instead of kicking them back to login page (which causes a flash)
                     if (profile.status !== 'approved') {
-                        setError("Your account is pending approval.");
+                        console.log("User is pending approval. Blocking login.");
                         await supabase.auth.signOut();
+                        setError("Account pending approval. Please contact administrator.");
                         return;
                     }
 
@@ -99,18 +135,34 @@ export const AdminLogin = () => {
                         localStorage.removeItem('sessionExpiry');
                     }
 
-                    login({ role: profile.role, email: normalizedEmail, id: data.user.id });
+                    console.log("Updating context with user data...");
+                    login({
+                        role: profile.role,
+                        email: normalizedEmail,
+                        id: data.user.id,
+                        status: profile.status,
+                        firstName: profile.first_name || data.user.user_metadata?.first_name || '',
+                        lastName: profile.last_name || data.user.user_metadata?.last_name || ''
+                    });
 
                     if (profile.role === 'user') {
-                        navigate('/');
+                        // If pending, send to dashboard to show the blocking message
+                        if (profile.status === 'pending') {
+                            console.log("User pending, redirecting to /admin/dashboard to show message");
+                            navigate('/admin/dashboard');
+                        } else {
+                            console.log("Redirecting to /");
+                            navigate('/');
+                        }
                     } else {
+                        console.log("Redirecting to /admin/dashboard");
                         navigate('/admin/dashboard');
                     }
                 }
             }
         } catch (err) {
             setError(err.message || 'An unexpected error occurred.');
-            console.error(err);
+            console.error("Auth Exception:", err);
         } finally {
             setLoading(false);
         }

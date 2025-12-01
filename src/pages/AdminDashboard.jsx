@@ -87,8 +87,20 @@ export const AdminDashboard = () => {
         }
     };
 
-    const handleLogout = () => {
-        logout();
+    const updateUserRole = async (id, newRole) => {
+        if (!window.confirm(`Change user role to ${newRole}?`)) return;
+        const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', id);
+        if (!error) {
+            setUsers(prev => prev.map(u => u.id === id ? { ...u, role: newRole } : u));
+            setStatusModal({ isOpen: true, type: 'success', message: "User role updated!" });
+        } else {
+            setStatusModal({ isOpen: true, type: 'error', message: "Failed to update role" });
+        }
+    };
+
+    const handleLogout = async () => {
+        await logout();
+        navigate('/');
     };
 
     const handleSaveConfig = (e) => {
@@ -445,7 +457,17 @@ export const AdminDashboard = () => {
                                                 : <span className="text-slate-400 italic">No Name</span>}
                                         </td>
                                         <td className="p-4">{user.email}</td>
-                                        <td className="p-4 capitalize">{user.role}</td>
+                                        <td className="p-4">
+                                            <select
+                                                value={user.role}
+                                                onChange={(e) => updateUserRole(user.id, e.target.value)}
+                                                className="bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize"
+                                            >
+                                                <option value="user">User</option>
+                                                <option value="moderator">Moderator</option>
+                                                <option value="admin">Admin</option>
+                                            </select>
+                                        </td>
                                         <td className="p-4">
                                             <span className={cn("px-2 py-1 rounded text-xs font-bold uppercase",
                                                 user.status === 'approved' ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
