@@ -11,11 +11,13 @@ export const Feedback = () => {
     const navigate = useNavigate();
     const { addFeedback, fields, categories } = useData();
     const initialSku = searchParams.get('sku') || '';
+    const initialLeg = searchParams.get('leg') || '';
 
     const [formData, setFormData] = useState({
         name: '',
         type: initialSku ? 'change_request' : 'general',
         sku: initialSku,
+        legNumber: initialLeg,
         message: ''
     });
 

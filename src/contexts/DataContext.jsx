@@ -51,6 +51,26 @@ export const DataProvider = ({ children }) => {
 
     useEffect(() => {
         fetchData();
+
+        // Check for session expiry (for "Remember Me: Unchecked" logic)
+        const checkSessionExpiry = async () => {
+            const expiry = localStorage.getItem('sessionExpiry');
+            if (expiry && Date.now() > parseInt(expiry, 10)) {
+                console.log("Session expired. Logging out.");
+                await supabase.auth.signOut();
+                localStorage.removeItem('sessionExpiry');
+                sessionStorage.removeItem('isAdmin');
+                sessionStorage.removeItem('userRole');
+                sessionStorage.removeItem('userEmail');
+                window.location.reload();
+            }
+        };
+
+        // Check immediately and then every minute
+        checkSessionExpiry();
+        const interval = setInterval(checkSessionExpiry, 60000);
+
+        return () => clearInterval(interval);
     }, []);
 
     // --- History Logging ---

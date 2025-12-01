@@ -232,7 +232,7 @@ export const Home = () => {
                                 <Button variant="secondary" className="flex-1 gap-2" onClick={() => handleViewDetails(foundSetting)}>
                                     <Eye className="h-4 w-4" /> View Details
                                 </Button>
-                                <Link to={`/feedback?sku=${foundSetting.sku}`} className="flex-1">
+                                <Link to={`/feedback?sku=${foundSetting.sku}&leg=${foundSetting.legNumber}`} className="flex-1">
                                     <Button variant="ghost" className="w-full gap-2">
                                         Request Change
                                     </Button>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Loader2 } from 'lucide-react';
 import { Input } from '../components/ui/Input';
@@ -13,6 +13,7 @@ export const AdminLogin = () => {
     const [isRegistering, setIsRegistering] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
     const navigate = useNavigate();
 
     const handleAuth = async (e) => {
@@ -85,6 +86,21 @@ export const AdminLogin = () => {
                     sessionStorage.setItem('isAdmin', 'true');
                     sessionStorage.setItem('userRole', profile.role);
                     sessionStorage.setItem('userEmail', normalizedEmail);
+
+                    // Handle "Remember Me" logic
+                    if (!rememberMe) {
+                        // Set a timeout to log out after 15 minutes (900,000 ms)
+                        setTimeout(async () => {
+                            await supabase.auth.signOut();
+                            window.location.reload();
+                        }, 15 * 60 * 1000);
+
+                        // Store in localStorage so it persists across tab closes/reopens until expiry
+                        localStorage.setItem('sessionExpiry', Date.now() + 15 * 60 * 1000);
+                    } else {
+                        localStorage.removeItem('sessionExpiry');
+                    }
+
                     navigate('/admin/dashboard');
                 }
             }
@@ -156,6 +172,21 @@ export const AdminLogin = () => {
                         />
                     </div>
 
+                    {!isRegistering && (
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                id="rememberMe"
+                                checked={rememberMe}
+                                onChange={(e) => setRememberMe(e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <label htmlFor="rememberMe" className="text-sm text-slate-600">
+                                Remember me on this device
+                            </label>
+                        </div>
+                    )}
+
                     {error && (
                         <div className={`p-3 text-sm rounded-md ${error.includes('successful') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
                             {error}
@@ -166,6 +197,12 @@ export const AdminLogin = () => {
                         {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                         {isRegistering ? 'Register' : 'Sign In'}
                     </Button>
+
+                    {!isRegistering && !rememberMe && (
+                        <p className="text-xs text-center text-slate-400 mt-2">
+                            Unchecked: Session expires in 15 minutes.
+                        </p>
+                    )}
 
                     <div className="text-center mt-4">
                         <button
