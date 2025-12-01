@@ -28,26 +28,18 @@ export const AdminLogin = () => {
                 const { data: authData, error: authError } = await supabase.auth.signUp({
                     email: normalizedEmail,
                     password,
+                    options: {
+                        data: {
+                            first_name: firstName,
+                            last_name: lastName,
+                        }
+                    }
                 });
 
                 if (authError) throw authError;
 
                 if (authData.user) {
-                    // Create Profile
-                    const { error: profileError } = await supabase.from('profiles').insert([{
-                        id: authData.user.id,
-                        email: normalizedEmail,
-                        first_name: firstName,
-                        last_name: lastName,
-                        role: 'moderator', // Default role
-                        status: 'pending' // Default status
-                    }]);
-
-                    if (profileError) {
-                        console.error("Profile creation failed:", profileError);
-                        throw new Error("Failed to create user profile.");
-                    }
-
+                    // Profile is created automatically by database trigger
                     setError("Registration successful! Please wait for an admin to approve your account.");
                     setIsRegistering(false);
                 }
