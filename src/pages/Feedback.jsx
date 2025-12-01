@@ -95,15 +95,25 @@ export const Feedback = () => {
                             </div>
                         </div>
 
-                        {/* Standard SKU Input for Change Request */}
+                        {/* Standard SKU & Leg Input for Change Request */}
                         {formData.type === 'change_request' && (
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-slate-700">Related SKU</label>
-                                <Input
-                                    value={formData.sku}
-                                    onChange={e => setFormData({ ...formData, sku: e.target.value })}
-                                    placeholder="12345"
-                                />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-700">Related SKU</label>
+                                    <Input
+                                        value={formData.sku}
+                                        onChange={e => setFormData({ ...formData, sku: e.target.value })}
+                                        placeholder="12345"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-700">Leg Number</label>
+                                    <Input
+                                        value={formData.legNumber || ''}
+                                        onChange={e => setFormData({ ...formData, legNumber: e.target.value })}
+                                        placeholder="e.g. 8"
+                                    />
+                                </div>
                             </div>
                         )}
 

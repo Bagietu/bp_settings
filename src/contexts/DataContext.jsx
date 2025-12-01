@@ -229,6 +229,7 @@ export const DataProvider = ({ children }) => {
             type: item.type,
             message: item.message,
             sku: item.sku,
+            leg_number: item.legNumber,
             status: 'pending'
         }]);
 

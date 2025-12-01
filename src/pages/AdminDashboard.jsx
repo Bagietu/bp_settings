@@ -349,8 +349,11 @@ export const AdminDashboard = () => {
                                     </div>
                                     <p className="font-medium text-slate-900">{item.name} <span className="font-normal text-slate-500">wrote:</span></p>
                                     <p className="text-slate-700 mt-1">{item.message}</p>
-                                    {item.sku && (
-                                        <p className="text-sm text-slate-500 mt-2">Ref SKU: {item.sku}</p>
+                                    {(item.sku || item.leg_number) && (
+                                        <div className="flex gap-4 mt-2 text-sm text-slate-500">
+                                            {item.sku && <p>Ref SKU: <span className="font-medium text-slate-700">{item.sku}</span></p>}
+                                            {item.leg_number && <p>Leg: <span className="font-medium text-slate-700">{item.leg_number}</span></p>}
+                                        </div>
                                     )}
                                 </div>
                             ))}
@@ -362,7 +365,7 @@ export const AdminDashboard = () => {
             {/* USERS TAB (Admin Only) */}
             {activeTab === 'users' && userRole === 'admin' && (
                 <div className="space-y-4">
-                    <div className="rounded-md border border-slate-200 bg-white overflow-hidden">
+                    <div className="rounded-md border border-slate-200 bg-white overflow-hidden overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-50 text-slate-700 font-medium">
                                 <tr>
@@ -415,7 +418,7 @@ export const AdminDashboard = () => {
             {/* HISTORY TAB (Admin Only) */}
             {activeTab === 'history' && userRole === 'admin' && (
                 <div className="space-y-4">
-                    <div className="rounded-md border border-slate-200 bg-white overflow-hidden">
+                    <div className="rounded-md border border-slate-200 bg-white overflow-hidden overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-50 text-slate-700 font-medium">
                                 <tr>
