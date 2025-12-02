@@ -17,7 +17,7 @@ export const AdminDashboard = () => {
         categories, addCategory, updateCategory, deleteCategory,
         feedback, resolveFeedback, deleteFeedback,
         logout,
-        votes, appConfig, updateAppConfig
+        votes, appConfig, updateAppConfig, refreshData, error
     } = useData();
 
     const [activeTab, setActiveTab] = useState('settings');
@@ -73,7 +73,6 @@ export const AdminDashboard = () => {
         const { error } = await supabase.from('history').delete().eq('id', id);
         if (error) {
             console.error("Error deleting history:", error);
-            console.error("Error deleting history:", error);
             setStatusModal({ isOpen: true, type: 'error', message: "Failed to delete history item" });
         } else {
             setHistory(prev => prev.filter(h => h.id !== id));
@@ -105,7 +104,6 @@ export const AdminDashboard = () => {
 
     const handleSaveConfig = (e) => {
         e.preventDefault();
-        updateAppConfig('vote_period_days', configForm.vote_period_days);
         updateAppConfig('vote_period_days', configForm.vote_period_days);
         setStatusModal({ isOpen: true, type: 'success', message: "Configuration saved!" });
     };
@@ -180,6 +178,36 @@ export const AdminDashboard = () => {
         tabs.push({ id: 'config', label: 'Config', icon: Shield });
     }
 
+    // ERROR STATE: Show banner if data fetch failed
+    if (error) {
+        return (
+            <div className="p-8 max-w-2xl mx-auto space-y-6">
+                <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center space-y-4">
+                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+                    <h2 className="text-xl font-bold text-red-700">Connection Error</h2>
+                    <p className="text-red-600">{error}</p>
+                    <div className="flex justify-center gap-4 pt-2">
+                        <Button
+                            onClick={() => {
+                                // Phase 33: Repair & Reload - Nuke everything and reload
+                                localStorage.clear();
+                                sessionStorage.clear();
+                                window.location.reload();
+                            }}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            Repair & Reload
+                        </Button>
+                        <Button onClick={() => window.location.reload()} variant="outline">Retry Only</Button>
+                        <Button variant="ghost" onClick={handleLogout} className="text-red-700 hover:bg-red-50">
+                            Logout
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -188,7 +216,15 @@ export const AdminDashboard = () => {
                     {userRole === 'admin' && <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded uppercase">Admin</span>}
                     {userRole === 'moderator' && <span className="bg-slate-100 text-slate-700 text-xs font-bold px-2 py-1 rounded uppercase">Moderator</span>}
                 </div>
-                <Button variant="ghost" onClick={handleLogout}>Logout</Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => {
+                        refreshData();
+                        setStatusModal({ isOpen: true, type: 'info', message: "Data refreshed!" });
+                    }}>
+                        Refresh Data
+                    </Button>
+                    <Button variant="ghost" onClick={handleLogout}>Logout</Button>
+                </div>
             </div>
 
             <div className="flex space-x-1 border-b border-slate-200 overflow-x-auto">
@@ -237,7 +273,7 @@ export const AdminDashboard = () => {
                                             <td className="p-4">{setting.caseSize}</td>
                                             <td className="p-4">{setting.legNumber}</td>
                                             <td className="p-4 text-slate-500">
-                                                {setting.lastUpdated ? new Date(setting.lastUpdated).toLocaleString() : '-'}
+                                                {setting.lastUpdated ? new Date(setting.lastUpdated).toLocaleString('en-GB') : '-'}
                                             </td>
                                             <td className="p-4 text-right space-x-2">
                                                 <Button variant="ghost" size="icon" onClick={() => openSettingModal(setting)}>
@@ -397,7 +433,7 @@ export const AdminDashboard = () => {
                                             )}>
                                                 {item.type.replace('_', ' ')}
                                             </span>
-                                            <span className="text-xs text-slate-500 ml-2">{new Date(item.date).toLocaleDateString()}</span>
+                                            <span className="text-xs text-slate-500 ml-2">{new Date(item.date).toLocaleDateString('en-GB')}</span>
                                         </div>
                                         <div className="flex gap-2">
                                             {item.status !== 'resolved' && (
@@ -475,7 +511,7 @@ export const AdminDashboard = () => {
                                                 {user.status}
                                             </span>
                                         </td>
-                                        <td className="p-4 text-slate-500">{new Date(user.created_at).toLocaleDateString()}</td>
+                                        <td className="p-4 text-slate-500">{new Date(user.created_at).toLocaleDateString('en-GB')}</td>
                                         <td className="p-4 text-right space-x-2">
                                             {user.status === 'pending' && (
                                                 <>
@@ -514,7 +550,7 @@ export const AdminDashboard = () => {
                                 {history.map((log) => (
                                     <tr key={log.id} className="hover:bg-slate-50">
                                         <td className="p-4 text-slate-500 whitespace-nowrap">
-                                            {new Date(log.created_at).toLocaleString()}
+                                            {new Date(log.created_at).toLocaleString('en-GB')}
                                         </td>
                                         <td className="p-4 font-medium">{log.user_email}</td>
                                         <td className="p-4">
@@ -566,7 +602,7 @@ export const AdminDashboard = () => {
                                 {votes.map((vote) => (
                                     <tr key={vote.id} className="hover:bg-slate-50">
                                         <td className="p-4 text-slate-500 whitespace-nowrap">
-                                            {new Date(vote.created_at).toLocaleString()}
+                                            {new Date(vote.created_at).toLocaleString('en-GB')}
                                         </td>
                                         <td className="p-4 font-medium">
                                             {(() => {
@@ -639,7 +675,7 @@ export const AdminDashboard = () => {
                             </div>
                             <div className="text-right">
                                 <p className="text-sm text-slate-500">Date</p>
-                                <p className="font-medium">{new Date(viewingHistoryItem.created_at).toLocaleString()}</p>
+                                <p className="font-medium">{new Date(viewingHistoryItem.created_at).toLocaleString('en-GB')}</p>
                             </div>
                         </div>
 
@@ -758,6 +794,7 @@ export const AdminDashboard = () => {
                     </div>
                 </form>
             </Modal>
+
             {/* STATUS MODAL */}
             <Modal
                 isOpen={statusModal.isOpen}

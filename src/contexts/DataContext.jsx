@@ -11,6 +11,7 @@ export const DataProvider = ({ children }) => {
     const [votes, setVotes] = useState([]);
     const [appConfig, setAppConfig] = useState({ vote_period_days: '7' });
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null); // Add error state
 
     // Search State (Global for Layout access)
     const [legSearch, setLegSearch] = useState('');
@@ -24,21 +25,67 @@ export const DataProvider = ({ children }) => {
     };
 
     // Fetch Initial Data
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const [settingsRes, fieldsRes, catsRes, feedbackRes, votesRes, configRes] = await Promise.all([
-                supabase.from('settings').select('*'),
-                supabase.from('fields').select('*'),
-                supabase.from('categories').select('*'),
-                supabase.from('feedback').select('*'),
-                supabase.from('votes').select('*'),
-                supabase.from('app_config').select('*')
-            ]);
+    const isFetchingRef = React.useRef(false);
 
-            if (settingsRes.data) {
+    const fetchData = async () => {
+        if (isFetchingRef.current) {
+            console.log("[Data] Fetch already in progress, skipping...");
+            return;
+        }
+        isFetchingRef.current = true;
+        setLoading(true);
+        setError(null);
+
+        // Helper to race a promise against a timeout
+        const withTimeout = (promise, ms = 15000, errorMsg = "Data load timed out") => {
+            return Promise.race([
+                promise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms))
+            ]);
+        };
+
+        // Helper for granular fetching with EXPONENTIAL BACKOFF logic
+        const fetchTable = async (tableName, queryPromise, isCritical = false, retries = 3, delay = 1000) => {
+            console.log(`[Data] Fetching ${tableName}...`);
+            try {
+                const { data, error } = await withTimeout(queryPromise, 15000, `${tableName} timed out`);
+                if (error) throw error;
+                console.log(`[Data] Success ${tableName}: ${data?.length ?? 0} rows`);
+                return data;
+            } catch (err) {
+                if (retries > 0) {
+                    console.warn(`[Data] Failed ${tableName}, retrying in ${delay}ms... (${retries} retries left)`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    // Exponential backoff: double the delay for next retry
+                    return fetchTable(tableName, queryPromise, isCritical, retries - 1, delay * 2);
+                }
+                console.error(`[Data] Failed ${tableName}:`, err);
+                if (isCritical) {
+                    // Phase 32: Graceful Failure - Do NOT re-throw. Just return null and let the UI handle the missing data.
+                    // We will set the global error state so the UI knows something went wrong, but we won't crash the whole flow.
+                    setError(`Failed to load ${tableName}. Please check your connection.`);
+                    return null;
+                }
+                return null; // Return null for non-critical failures (partial load)
+            }
+        };
+
+        try {
+            // SEQUENTIAL LOADING to prevent browser connection saturation
+            // Phase 31: Reordered to fetch 'categories' (smallest) first to "warm up" connection
+            // 1. Critical Data (Categories, Settings, Fields) - Load one by one
+            const catsData = await fetchTable('categories', supabase.from('categories').select('*'), true);
+            const settingsData = await fetchTable('settings', supabase.from('settings').select('*'), true);
+            const fieldsData = await fetchTable('fields', supabase.from('fields').select('*'), true);
+
+            // 2. Non-Critical Data (Feedback, Votes, Config) - Load one by one
+            const feedbackData = await fetchTable('feedback', supabase.from('feedback').select('*'), false);
+            const votesData = await fetchTable('votes', supabase.from('votes').select('*'), false);
+            const configData = await fetchTable('app_config', supabase.from('app_config').select('*'), false);
+
+            if (settingsData) {
                 // Flatten the 'data' JSONB column back into the object for the UI
-                const flattenedSettings = settingsRes.data.map(s => ({
+                const flattenedSettings = settingsData.map(s => ({
                     ...s,
                     ...s.data, // Spread the JSONB fields (temp, speed, etc.) to top level
                     caseSize: s.case_size, // Map snake_case to camelCase
@@ -47,25 +94,27 @@ export const DataProvider = ({ children }) => {
                 }));
                 setSettings(flattenedSettings);
             }
-            if (fieldsRes.data) {
+            if (fieldsData) {
                 // Map category_id to categoryId for UI consistency
-                const mappedFields = fieldsRes.data.map(f => ({
+                const mappedFields = fieldsData.map(f => ({
                     ...f,
                     categoryId: f.category_id
                 }));
                 setFields(mappedFields);
             }
-            if (catsRes.data) setCategories(catsRes.data);
-            if (feedbackRes.data) setFeedback(feedbackRes.data);
-            if (votesRes.data) setVotes(votesRes.data);
-            if (configRes.data) {
-                const configObj = configRes.data.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {});
+            if (catsData) setCategories(catsData);
+            if (feedbackData) setFeedback(feedbackData);
+            if (votesData) setVotes(votesData);
+            if (configData) {
+                const configObj = configData.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {});
                 setAppConfig(prev => ({ ...prev, ...configObj }));
             }
         } catch (error) {
             console.error("Error fetching data:", error);
+            setError(error.message || "Failed to load data. Please check your connection.");
         } finally {
             setLoading(false);
+            isFetchingRef.current = false;
         }
     };
 
@@ -99,71 +148,124 @@ export const DataProvider = ({ children }) => {
 
     const logout = async () => {
         try {
-            await supabase.auth.signOut();
+            // SAFE LOGOUT: Race against a timeout to prevent hanging
+            const signOutPromise = supabase.auth.signOut();
+            const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2000));
+
+            await Promise.race([signOutPromise, timeoutPromise]);
         } catch (error) {
             console.error("Error signing out:", error);
         } finally {
+            // ALWAYS clear local state
             sessionStorage.removeItem('isAdmin');
             sessionStorage.removeItem('userRole');
             sessionStorage.removeItem('userEmail');
             sessionStorage.removeItem('userId');
             sessionStorage.removeItem('userStatus');
+            sessionStorage.removeItem('userFirstName');
+            sessionStorage.removeItem('userLastName');
             localStorage.removeItem('sessionExpiry');
+
+            // Phase 33: Aggressive Cleanup - Nuke Supabase keys to prevent zombie sessions
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('sb-')) {
+                    localStorage.removeItem(key);
+                }
+            });
+
             setUser(null);
             // Navigation is now handled by the caller (Layout.jsx)
         }
     };
 
     useEffect(() => {
-        fetchData();
+        // REMOVED: Initial Data Fetch (fetchData()) - We rely on the auth listener to trigger this now
+        // This prevents double-fetching on load (once here, once in auth listener)
+        // Phase 30: Consolidated all fetching into the listener below to avoid race conditions.
+
+        // STRICT SESSION CHECK on mount
+        // Instead of getSession (local), use getUser (server) to verify token validity
+        supabase.auth.getUser().then(({ data: { user }, error }) => {
+            if (error || !user) {
+                console.log("Strict session check failed. Clearing local state.");
+                setUser(null);
+                sessionStorage.clear();
+                localStorage.removeItem('sessionExpiry');
+
+                // Phase 33: Aggressive Cleanup on failed check
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('sb-')) {
+                        console.log("Nuking corrupt/stale session key:", key);
+                        localStorage.removeItem(key);
+                    }
+                });
+            }
+        });
 
         // Listen for Auth Changes (Syncs UI with Supabase Session)
         const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
             console.log("Auth State Change:", event, session?.user?.email);
 
-            if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-                // Fetch profile to get role and name
-                console.log("Fetching profile for user:", session.user.id);
-                const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+            // Phase 30: Unified Data Loading Logic
+            // We fetch data on:
+            // 1. SIGNED_IN: User just logged in.
+            // 2. INITIAL_SESSION: App just loaded (whether user is logged in OR guest).
+            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+                console.log("Session event detected, triggering data fetch...");
+                // Add a small delay to ensure connection is fully established/settled
+                // Phase 31: Increased delay to 1000ms to rule out connection saturation
+                setTimeout(() => {
+                    fetchData();
+                }, 1000);
 
-                if (error) {
-                    console.error("Error fetching profile in listener:", error);
-                }
+                if (session) {
+                    // Fetch profile to get role and name
+                    console.log("Fetching profile for user:", session.user.id);
+                    const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
 
-                // Even if profile is missing, we MUST set the user state so the app knows we are logged in.
-                // Default to 'user' role and 'pending' status if profile is missing.
-                // Fallback to user_metadata for name if not in profile
-                const userData = {
-                    id: session.user.id,
-                    email: session.user.email,
-                    role: profile?.role || 'user',
-                    status: profile?.status || 'pending',
-                    firstName: profile?.first_name || session.user.user_metadata?.first_name || '',
-                    lastName: profile?.last_name || session.user.user_metadata?.last_name || ''
-                };
+                    if (error) {
+                        console.error("Error fetching profile in listener:", error);
+                    }
 
-                // STRICT BLOCKING: If user is pending, force logout immediately.
-                if (userData.status === 'pending') {
-                    console.log("User is pending. Forcing logout.");
-                    await supabase.auth.signOut();
+                    // Even if profile is missing, we MUST set the user state so the app knows we are logged in.
+                    // Default to 'user' role and 'pending' status if profile is missing.
+                    // Fallback to user_metadata for name if not in profile
+                    const userData = {
+                        id: session.user.id,
+                        email: session.user.email,
+                        role: profile?.role || 'user',
+                        status: profile?.status || 'pending',
+                        firstName: profile?.first_name || session.user.user_metadata?.first_name || '',
+                        lastName: profile?.last_name || session.user.user_metadata?.last_name || ''
+                    };
+
+                    // STRICT BLOCKING: If user is pending, force logout immediately.
+                    if (userData.status === 'pending') {
+                        console.log("User is pending. Forcing logout.");
+                        await logout(); // Use safe logout
+                        return; // Stop execution
+                    }
+
+                    console.log("Setting user in context:", userData);
+                    setUser(userData);
+
+                    // Keep Session Storage in sync
+                    sessionStorage.setItem('isAdmin', 'true');
+                    sessionStorage.setItem('userRole', userData.role);
+                    sessionStorage.setItem('userEmail', userData.email);
+                    sessionStorage.setItem('userId', userData.id);
+                    sessionStorage.setItem('userStatus', userData.status);
+                    sessionStorage.setItem('userFirstName', userData.firstName);
+                    sessionStorage.setItem('userLastName', userData.lastName);
+                } else if (event === 'INITIAL_SESSION' && !session) {
+                    // Guest Mode: INITIAL_SESSION with no session means we are a guest.
+                    // We still fetched data above, so we just ensure user state is null.
+                    console.log("Guest session initialized.");
                     setUser(null);
-                    sessionStorage.clear();
-                    localStorage.removeItem('sessionExpiry');
-                    return; // Stop execution
                 }
-
-                console.log("Setting user in context:", userData);
-                setUser(userData);
-
-                // Keep Session Storage in sync
-                sessionStorage.setItem('isAdmin', 'true');
-                sessionStorage.setItem('userRole', userData.role);
-                sessionStorage.setItem('userEmail', userData.email);
-                sessionStorage.setItem('userId', userData.id);
-                sessionStorage.setItem('userStatus', userData.status);
-                sessionStorage.setItem('userFirstName', userData.firstName);
-                sessionStorage.setItem('userLastName', userData.lastName);
             } else if (event === 'SIGNED_OUT') {
+                // Handle explicit sign out
+                console.log("User signed out. Clearing context.");
                 setUser(null);
                 sessionStorage.clear();
                 localStorage.removeItem('sessionExpiry');
@@ -452,24 +554,29 @@ export const DataProvider = ({ children }) => {
         }
     };
 
+    const value = {
+        settings, addSetting, updateSetting, deleteSetting,
+        fields, addField, updateField, removeField,
+        categories, addCategory, updateCategory, deleteCategory,
+        feedback, addFeedback, resolveFeedback, deleteFeedback,
+        loading, error,
+        user, login, logout,
+        votes, addVote,
+        appConfig, updateAppConfig,
+        legSearch, setLegSearch,
+        skuSearch, setSkuSearch,
+        selectedCaseSize, setSelectedCaseSize,
+        refreshData: fetchData,
+        resetSearch
+    };
+
     return (
-        <DataContext.Provider value={{
-            settings, addSetting, updateSetting, deleteSetting,
-            fields, addField, updateField, removeField,
-            categories, addCategory, updateCategory, deleteCategory,
-            feedback, addFeedback, resolveFeedback, deleteFeedback,
-            loading,
-            user, login, logout,
-            votes, addVote,
-            appConfig, updateAppConfig,
-            legSearch, setLegSearch,
-            skuSearch, setSkuSearch,
-            selectedCaseSize, setSelectedCaseSize,
-            resetSearch
-        }}>
+        <DataContext.Provider value={value}>
             {children}
         </DataContext.Provider>
     );
 };
 
-export const useData = () => useContext(DataContext);
+export function useData() {
+    return useContext(DataContext);
+}

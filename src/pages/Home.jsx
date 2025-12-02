@@ -265,13 +265,13 @@ export const Home = () => {
                                                         <div>
                                                             <h4 className="font-bold text-slate-900 text-lg">{setting.sku}</h4>
                                                             <p className="text-xs text-slate-500">Case: {setting.caseSize}</p>
-                                                            <p className="text-xs text-slate-500">Last Change: {setting.lastUpdated ? new Date(setting.lastUpdated).toLocaleDateString() : '-'}</p>
+                                                            <p className="text-xs text-slate-500">Last Change: {setting.lastUpdated ? new Date(setting.lastUpdated).toLocaleDateString('en-GB') : '-'}</p>
                                                         </div>
                                                     </div>
                                                     {setting.lastWorked && (
                                                         <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
                                                             <CheckCircle className="h-3 w-3" />
-                                                            Worked: {setting.lastWorked.toLocaleDateString()}
+                                                            Worked: {setting.lastWorked.toLocaleDateString('en-GB')}
                                                         </span>
                                                     )}
                                                 </div>
@@ -310,7 +310,7 @@ export const Home = () => {
                             <div>
                                 <span className="text-xs text-slate-500 uppercase tracking-wider">Last Worked</span>
                                 <p className="font-semibold text-lg text-green-600">
-                                    {selectedSettingDetails.lastWorked ? selectedSettingDetails.lastWorked.toLocaleDateString() : 'Never'}
+                                    {selectedSettingDetails.lastWorked ? selectedSettingDetails.lastWorked.toLocaleDateString('en-GB') : 'Never'}
                                 </p>
                             </div>
                         </div>
